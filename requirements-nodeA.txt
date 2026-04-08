@@ -1,0 +1,36 @@
+# Node A — CPU-only dependencies
+# Install with:  pip install -r requirements-nodeA.txt
+
+# Ray distributed computing
+ray[default]==2.54.1
+
+# Data & ML (CPU)
+pandas>=2.0.0
+numpy>=1.24.0
+scipy>=1.11.0
+yfinance>=0.2.36
+
+# NLP / Transformers (CPU-only torch)
+# NOTE: torch is installed separately via --index-url; do not add it here
+transformers==4.40.0
+datasets>=2.14.0
+sentencepiece>=0.1.99
+accelerate>=0.25.0
+
+# Evaluation metrics
+rouge-score>=0.1.2
+bert-score>=0.3.13
+
+# Orchestration
+langchain>=0.1.0
+langgraph>=0.0.30
+
+# SEC data ingestion
+sec-edgar-downloader>=5.0.3
+
+# Utilities
+pyyaml>=6.0
+tqdm>=4.66.0
+psutil>=5.9.0
+matplotlib>=3.7.0
+seaborn>=0.12.0

@@ -1,0 +1,26 @@
+# Node B — GPU dependencies (CUDA 12.1)
+# torch is installed FIRST separately (see setup_nodeB.ps1 or QUICKREF.md)
+# Then install this file:  pip install -r requirements-nodeB.txt
+
+# Ray distributed computing
+ray[default]==2.54.1
+
+# Transformers + quantization
+transformers==4.40.0
+bitsandbytes==0.43.0
+accelerate>=0.25.0
+sentencepiece>=0.1.99
+
+# Evaluation
+rouge-score>=0.1.2
+bert-score>=0.3.13
+datasets>=2.14.0
+
+# Utilities
+pyyaml>=6.0
+tqdm>=4.66.0
+psutil>=5.9.0
+scipy>=1.11.0
+pandas>=2.0.0
+numpy>=1.24.0
+yfinance>=0.2.36

@@ -1,0 +1,45 @@
+# cluster_config.yaml
+# Edit NGROK_HOST and NGROK_PORT after Node A starts the Ngrok tunnel.
+
+nodes:
+  node_a:
+    role: head
+    host: localhost
+    ray_port: 6379
+    dashboard_port: 8265
+    resources: { cpu: true, gpu: false }
+
+  node_b:
+    role: worker
+    host: ""       # <-- fill in after running: ngrok tcp 6379
+    port: 0         # <-- fill in after running: ngrok tcp 6379
+    resources: { cpu: true, gpu: true, vram_mb: 4096 }
+
+models:
+  finbert_market:     "ProsusAI/finbert"
+  finbert_regulatory: "yiyanghkust/finbert-tone"
+  finbert_temporal:   "ProsusAI/finbert"
+  summarizer:         "microsoft/Phi-3-mini-4k-instruct"
+
+pipeline:
+  chunk_size_tokens:            512
+  chunk_stride_tokens:           64
+  min_sentiment_confidence:    0.60
+  bert_score_filter_threshold: 0.82
+  finbert_batch_size:             8
+
+vram_budget_mb:
+  finbert_per_actor: 340     # 4-bit NF4  (680 for 8-bit fallback)
+  phi3_mini:        1800     # 4-bit Phi-3-mini
+  ray_overhead:      200
+  safety_buffer:     416
+  total_limit:      4096     # T1000 hard limit
+
+evaluation:
+  h1_latency_reduction_target_pct: 30
+  h2_rouge_l_target_delta:          1.0
+  h3_sentiment_changed_outcome_pct: 10
+
+logging:
+  level: INFO
+  dir: logs/

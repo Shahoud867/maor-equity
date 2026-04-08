@@ -1,0 +1,69 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.Python
+*.egg-info/
+dist/
+build/
+*.egg
+
+# Virtual environments (never commit venv — it's huge and OS-specific)
+venv/
+env/
+.venv/
+ENV/
+
+# Jupyter
+.ipynb_checkpoints/
+*.ipynb
+
+# Data files (large — share via HuggingFace / Kaggle links instead)
+data/sec-edgar-filings/
+data/ectsum/*.jsonl
+data/ectsum/*.json
+data/*.parquet
+data/*.csv
+data/*.pkl
+
+# Model cache (never commit model weights)
+*.bin
+*.safetensors
+*.gguf
+*.pt
+*.pth
+model_cache/
+hf_cache/
+~/.cache/
+
+# Logs and results (transient)
+logs/*.log
+logs/*.jsonl
+results/
+
+# Ngrok / secrets — NEVER commit tokens
+.ngrok/
+ngrok.yml
+*.token
+.env
+.env.*
+secrets.yaml
+secrets.json
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Ray temporary files
+/tmp/ray/
+
+# Node B scratch
+node_b_scratch/
