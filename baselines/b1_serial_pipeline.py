@@ -1,4 +1,11 @@
-"""B1: All pipeline stages sequential on a single node — latency baseline."""
+"""
+B1: All pipeline stages sequential on a SINGLE node — latency baseline for H1.
+
+IMPORTANT: B1 must include the same stages as the distributed pipeline to be
+a fair comparison. Stages: ingestion, sentiment (1-D scalar), summarisation,
+technical, guardrail. All run sequentially; no cross-node communication.
+Run this on Node B (GPU node) to match the distributed pipeline's GPU work.
+"""
 import json, time, statistics
 
 
@@ -47,6 +54,16 @@ def run_serial(ticker: str, filing_type: str = "8-K") -> dict:
         l  = (-dv.clip(upper=0)).rolling(14).mean()
         _  = (100 - 100 / (1 + g / l.replace(0, float("inf")))).iloc[-1]
     timings["technical"] = time.time() - t
+
+    # Stage 5 — Guardrail (sequential, GPU) — must be included for fair comparison
+    t = time.time()
+    bull_prompt = f"Make the strongest BULL case.\nText: {text[:500]}\nJSON: {{\"direction\":\"bullish\",\"confidence\":0.0,\"signals\":[]}}"
+    bear_prompt = f"Make the strongest BEAR case.\nText: {text[:500]}\nJSON: {{\"direction\":\"bearish\",\"confidence\":0.0,\"signals\":[]}}"
+    for prompt in [bull_prompt, bear_prompt]:
+        inp = tok(prompt, return_tensors="pt", truncation=True, max_length=1000).to("cuda")
+        with torch.no_grad():
+            mdl.generate(**inp, max_new_tokens=100)
+    timings["guardrail"] = time.time() - t
 
     timings["total"] = time.time() - T0
     return {"method": "B1_serial", "ticker": ticker, "timings": timings}
