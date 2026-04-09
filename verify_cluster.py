@@ -10,6 +10,7 @@ be incorrectly marked dead.
 Usage:
     python verify_cluster.py
     RAY_ADDRESS=172.26.19.0:6379 python verify_cluster.py
+    VERIFY_WAIT_SECONDS=60 VERIFY_POLL_SECONDS=5 python verify_cluster.py
 """
 import os
 import sys
