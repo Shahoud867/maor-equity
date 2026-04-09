@@ -3,6 +3,13 @@ import json, time
 from transformers import pipeline
 
 
+def run_scalar_sentiment(text: str) -> dict:
+    """Single-text version used by sentiment_eval.py."""
+    result = run([text])
+    r = result["results"][0]
+    return {"direction": r["label"].lower(), "score": r["score"]}
+
+
 def run(texts: list) -> dict:
     t0   = time.time()
     pipe = pipeline("text-classification", model="ProsusAI/finbert", device=0)
