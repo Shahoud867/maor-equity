@@ -140,6 +140,12 @@ if($NgrokHost -ne "" -and $NgrokPort -ne 0){
         Invoke-WSL "cd '$WSL_ROOT' && source venv/bin/activate && export LD_PRELOAD='' && RAY_DISABLE_JEMALLOC=1 ray start --address=${NgrokHost}:${NgrokPort}" "Connecting Ray worker via Ngrok"
     }
     Write-OK "Ray worker connected. Ask partner to run: python verify_cluster.py"
+    Write-Host "  For resilient reconnects on Node B, prefer running:" -ForegroundColor White
+    Write-Host "  cd '$WSL_ROOT'" -ForegroundColor Gray
+    Write-Host "  source venv/bin/activate" -ForegroundColor Gray
+    Write-Host "  export LD_PRELOAD=''" -ForegroundColor Gray
+    Write-Host "  export RAY_DISABLE_JEMALLOC=1" -ForegroundColor Gray
+    Write-Host "  bash scripts/nodeb_connect_watch.sh --address=${NgrokHost}:${NgrokPort}" -ForegroundColor Gray
 }else{
     Write-Warn "NgrokHost/NgrokPort not supplied — Ray worker NOT connected yet."
     Write-Host "  Once Node A is running, execute in WSL:" -ForegroundColor White
