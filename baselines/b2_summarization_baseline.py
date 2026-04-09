@@ -3,6 +3,12 @@ import json, time, torch
 from transformers import AutoTokenizer, AutoModelForCausalLM
 
 
+def run_single_pass(transcript: str) -> str:
+    """Returns just the summary string — used by rouge_eval.py."""
+    result = run(transcript)
+    return result["summary"]
+
+
 def run(transcript: str) -> dict:
     tok = AutoTokenizer.from_pretrained("microsoft/Phi-3-mini-4k-instruct")
     mdl = AutoModelForCausalLM.from_pretrained(
