@@ -50,9 +50,15 @@ Wait for your partner to send you the Ngrok address (looks like `0.tcp.ngrok.io:
 
 ```bash
 source venv/bin/activate
+export LD_PRELOAD=''
 export RAY_DISABLE_JEMALLOC=1
+bash scripts/nodeb_connect_watch.sh --address=<NGROK_ADDRESS_FROM_PARTNER>
+# Preferred: keeps Node B attached and auto-reconnects if Ray drops.
+```
+
+Fallback (one-shot connect):
+```bash
 ray start --address=<NGROK_ADDRESS_FROM_PARTNER>
-# Expected: "Ray runtime started. Connected to Ray cluster at <address>"
 ```
 
 ## Step 5 — Verify cluster (ask partner to run this on Node A)
@@ -104,6 +110,6 @@ Do not run old code that loads them separately — it will OOM.
 
 ## Troubleshooting
 - **OOM error**: Run `python evaluation/vram_verify.py` to see what's using memory
-- **Ray connection refused**: Make sure partner's Ngrok is running, re-run `ray start --address=...`
+- **Ray connection refused**: Make sure partner's Ngrok is running, then restart `bash scripts/nodeb_connect_watch.sh --address=...`
 - **Models not found**: Re-run Step 3 model download
 - **bitsandbytes error**: Verify torch+CUDA installed before bitsandbytes — check `pip list | grep torch`
