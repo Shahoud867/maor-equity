@@ -135,9 +135,9 @@ print('All models downloaded.')
 Write-Banner "RAY WORKER CONNECTION"
 if($NgrokHost -ne "" -and $NgrokPort -ne 0){
     if($VirtualBoxFallback){
-        Invoke-WSL "cd '$WSL_ROOT' && source venv/bin/activate && ray start --address=${VBOX_HEAD}:6379" "Connecting Ray worker (VirtualBox)"
+        Invoke-WSL "cd '$WSL_ROOT' && source venv/bin/activate && export LD_PRELOAD='' && RAY_DISABLE_JEMALLOC=1 ray start --address=${VBOX_HEAD}:6379" "Connecting Ray worker (VirtualBox)"
     }else{
-        Invoke-WSL "cd '$WSL_ROOT' && source venv/bin/activate && ray start --address=${NgrokHost}:${NgrokPort}" "Connecting Ray worker via Ngrok"
+        Invoke-WSL "cd '$WSL_ROOT' && source venv/bin/activate && export LD_PRELOAD='' && RAY_DISABLE_JEMALLOC=1 ray start --address=${NgrokHost}:${NgrokPort}" "Connecting Ray worker via Ngrok"
     }
     Write-OK "Ray worker connected. Ask partner to run: python verify_cluster.py"
 }else{
@@ -145,7 +145,8 @@ if($NgrokHost -ne "" -and $NgrokPort -ne 0){
     Write-Host "  Once Node A is running, execute in WSL:" -ForegroundColor White
     Write-Host "  cd '$WSL_ROOT'" -ForegroundColor Gray
     Write-Host "  source venv/bin/activate" -ForegroundColor Gray
-    Write-Host "  ray start --address=<ngrok_host>:<ngrok_port>" -ForegroundColor Gray
+    Write-Host "  export LD_PRELOAD=''" -ForegroundColor Gray
+    Write-Host "  RAY_DISABLE_JEMALLOC=1 ray start --address=<ngrok_host>:<ngrok_port>" -ForegroundColor Gray
 }
 
 Write-Banner "NODE B SETUP COMPLETE" "Green"
