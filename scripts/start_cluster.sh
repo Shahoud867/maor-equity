@@ -1,12 +1,14 @@
 #!/usr/bin/env bash
-# start_cluster.sh — run inside WSL on Node A to bring up Ray + Ngrok
+# start_cluster.sh - run inside WSL on Node A to bring up Ray + Ngrok
 set -e
 
 PROJECT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 source "$PROJECT_DIR/venv/bin/activate"
 
 echo "=== Starting Ray head node ==="
-ray start --head --port=6379 --dashboard-host=0.0.0.0
+# Prevent Ray from inheriting a broken LD_PRELOAD split by spaces in this path.
+export LD_PRELOAD=""
+RAY_DISABLE_JEMALLOC=1 ray start --head --port=6379 --dashboard-host=0.0.0.0 --disable-usage-stats
 
 echo ""
 echo "=== Starting Ngrok TCP tunnel ==="
