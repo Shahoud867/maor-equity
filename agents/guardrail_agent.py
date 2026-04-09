@@ -1,6 +1,10 @@
 """
 guardrail_agent.py  —  Node B (GPU)
 Bull / Bear assessment with weighted rule-based arbiter using Phi-3-mini.
+
+VRAM note: GuardrailAgent shares the Phi-3-mini model with SummarizationAgent
+via a dedicated Phi3ModelActor to stay within the 4 GB T1000 budget.
+Both agents receive a handle to the same actor and call .generate() on it.
 """
 import json
 import ray
@@ -8,7 +12,8 @@ import numpy as np
 
 
 @ray.remote(num_gpus=0.2)
-class GuardrailAgent:
+class Phi3ModelActor:
+    """Singleton model actor — loaded once, shared by Summarizer and Guardrail."""
 
     def __init__(self):
         from transformers import AutoModelForCausalLM, AutoTokenizer
@@ -16,14 +21,27 @@ class GuardrailAgent:
         self.mdl = AutoModelForCausalLM.from_pretrained(
             "microsoft/Phi-3-mini-4k-instruct", load_in_4bit=True, device_map="auto"
         )
+        print("[Phi3ModelActor] Phi-3-mini loaded once — shared by summarizer + guardrail")
 
-    def _gen_json(self, prompt: str) -> dict:
+    def generate(self, prompt: str, max_new_tokens: int = 300) -> str:
         import torch
         inp = self.tok(prompt, return_tensors="pt",
-                       truncation=True, max_length=2000).to("cuda")
+                       truncation=True, max_length=3500).to("cuda")
         with torch.no_grad():
-            out = self.mdl.generate(**inp, max_new_tokens=200, temperature=0.1)
-        txt = self.tok.decode(out[0][inp["input_ids"].shape[1]:], skip_special_tokens=True)
+            out = self.mdl.generate(**inp, max_new_tokens=max_new_tokens,
+                                    temperature=0.1, do_sample=False)
+        return self.tok.decode(out[0][inp["input_ids"].shape[1]:], skip_special_tokens=True)
+
+
+@ray.remote(num_gpus=0.0)   # no extra GPU alloc — uses shared Phi3ModelActor
+class GuardrailAgent:
+
+    def __init__(self, phi3_actor):
+        # Receive handle to the shared model actor — no separate model load
+        self.phi3 = phi3_actor
+
+    def _gen_json(self, prompt: str) -> dict:
+        txt = ray.get(self.phi3.generate.remote(prompt, 200))
         try:
             return json.loads(txt[txt.find("{") : txt.rfind("}") + 1])
         except Exception:

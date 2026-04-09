@@ -6,26 +6,17 @@ import ray
 import torch
 
 
-@ray.remote(num_gpus=0.5)
+@ray.remote(num_gpus=0.0)   # no extra GPU alloc — uses shared Phi3ModelActor
 class SummarizationAgent:
 
-    def __init__(self):
-        from transformers import AutoModelForCausalLM, AutoTokenizer
-        self.tok = AutoTokenizer.from_pretrained("microsoft/Phi-3-mini-4k-instruct")
-        self.mdl = AutoModelForCausalLM.from_pretrained(
-            "microsoft/Phi-3-mini-4k-instruct", load_in_4bit=True, device_map="auto"
-        )
-        print("[SummarizationAgent] Phi-3-mini ready")
+    def __init__(self, phi3_actor):
+        # Receive handle to the shared model actor — no separate model load
+        self.phi3 = phi3_actor
+        print("[SummarizationAgent] ready (using shared Phi3ModelActor)")
 
     # ------------------------------------------------------------------
     def _gen(self, prompt: str, max_new: int = 300) -> str:
-        inp = self.tok(prompt, return_tensors="pt",
-                       truncation=True, max_length=3500).to("cuda")
-        with torch.no_grad():
-            out = self.mdl.generate(**inp, max_new_tokens=max_new,
-                                    temperature=0.1, do_sample=False)
-        return self.tok.decode(out[0][inp["input_ids"].shape[1]:],
-                               skip_special_tokens=True)
+        return ray.get(self.phi3.generate.remote(prompt, max_new))
 
     # ------------------------------------------------------------------
     def map_chunk(self, chunk: dict) -> dict:
@@ -42,10 +33,18 @@ class SummarizationAgent:
                 "has_conflict": "[CONFLICT]" in s}
 
     # ------------------------------------------------------------------
+    @staticmethod
+    def _approx_tokens(text: str) -> int:
+        """Fast character-based token estimate (≈ 1 token per 4 chars).
+        Replaces self.tok.encode() — tok was removed when we switched to
+        shared Phi3ModelActor; this avoids loading a tokenizer on Node B
+        just for a length check."""
+        return len(text) // 4
+
     def reduce(self, summaries: list, depth: int = 3) -> dict:
         combined = "\n".join(f"Chunk {s['chunk_id']}: {s['summary']}"
                              for s in summaries)
-        if len(self.tok.encode(combined)) > 3000 and depth > 0:
+        if self._approx_tokens(combined) > 3000 and depth > 0:
             mid   = len(summaries) // 2
             left  = self.reduce(summaries[:mid],  depth - 1)["summary"]
             right = self.reduce(summaries[mid:], depth - 1)["summary"]
