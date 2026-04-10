@@ -64,15 +64,6 @@ export RAY_DISABLE_JEMALLOC=1
 export RAY_raylet_start_wait_time_s=60
 export RAY_GCS_SERVER_REQUEST_TIMEOUT_SECONDS=60
 
-# ── Heartbeat tolerance for high-latency Ngrok tunnel ────────
-# Default: 30 heartbeats × 1000ms = 30s before marking a node dead.
-# Ngrok adds 100–400ms RTT, causing spurious heartbeat drops.
-# New: 100 heartbeats × 5000ms = 500s tolerance.
-export RAY_num_heartbeats_timeout=100
-export RAY_raylet_heartbeat_period_milliseconds=5000
-export RAY_grpc_keepalive_time_ms=30000
-export RAY_grpc_keepalive_timeout_ms=60000
-
 "$RAY" start \
     --head \
     --port=6379 \
