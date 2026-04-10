@@ -1,157 +1,90 @@
 #!/usr/bin/env bash
-# Keep Node B connected to Node A's Ray head through transient failures.
+# =============================================================
+# nodeb_connect_watch.sh  —  run on NODE B inside WSL terminal
+# Auto-reconnects whenever the local raylet process dies.
+# NEVER calls ray.init() or ray.shutdown() — those disrupt the
+# worker connection registered with GCS.
+# =============================================================
 
-set -euo pipefail
-
-PROJECT_ROOT="$(dirname "$(dirname "$(realpath "$0")")")"
-VENV_DEFAULT="$PROJECT_ROOT/venv"
+set -uo pipefail
 
 ADDRESS=""
-INTERVAL=8
-VENV_PATH="$VENV_DEFAULT"
+VENV_PATH="$HOME/maor-equity/venv"   # adjust if cloned elsewhere
 
 usage() {
-    cat <<EOF
-Usage: bash scripts/nodeb_connect_watch.sh --address <host:port> [--interval <sec>] [--venv <path>]
-
-Examples:
-  bash scripts/nodeb_connect_watch.sh --address 0.tcp.ap.ngrok.io:11311
-  bash scripts/nodeb_connect_watch.sh --address 0.tcp.ap.ngrok.io:11311 --interval 10
-
-Notes:
-  - Expects Ray + Python packages installed in the given venv.
-  - Keeps running until Ctrl+C and reconnects Node B automatically on drops.
-EOF
+    echo "Usage: bash nodeb_connect_watch.sh --address HOST:PORT [--venv PATH]"
+    echo "Example: bash nodeb_connect_watch.sh --address 0.tcp.ap.ngrok.io:12345"
 }
 
 while [[ $# -gt 0 ]]; do
     case "$1" in
-        --address)
-            ADDRESS="${2:-}"
-            shift 2
-            ;;
-        --interval)
-            INTERVAL="${2:-}"
-            shift 2
-            ;;
-        --venv)
-            VENV_PATH="${2:-}"
-            shift 2
-            ;;
-        -h|--help)
-            usage
-            exit 0
-            ;;
-        *)
-            echo "Unknown argument: $1"
-            usage
-            exit 1
-            ;;
+        --address) ADDRESS="${2:-}"; shift 2 ;;
+        --venv)    VENV_PATH="${2:-}"; shift 2 ;;
+        -h|--help) usage; exit 0 ;;
+        *) echo "Unknown: $1"; usage; exit 1 ;;
     esac
 done
 
 if [[ -z "$ADDRESS" ]]; then
-    echo "Missing required --address <host:port>."
+    echo "ERROR: --address is required."
     usage
     exit 1
 fi
 
-if ! [[ "$INTERVAL" =~ ^[0-9]+$ ]] || [[ "$INTERVAL" -lt 1 ]]; then
-    echo "--interval must be a positive integer."
-    exit 1
-fi
-
-PY_BIN="$VENV_PATH/bin/python3"
 RAY_BIN="$VENV_PATH/bin/ray"
-
-if [[ ! -x "$PY_BIN" ]]; then
-    echo "Python not found at: $PY_BIN"
-    exit 1
-fi
 if [[ ! -x "$RAY_BIN" ]]; then
-    echo "Ray CLI not found at: $RAY_BIN"
+    echo "ERROR: Ray not found at $RAY_BIN"
+    echo "Set --venv to the correct venv path."
     exit 1
 fi
 
 export LD_PRELOAD=""
 export RAY_DISABLE_JEMALLOC=1
+export CUDA_VISIBLE_DEVICES=0
 
-LOCAL_IP="$(hostname -I | awk '{print $1}')"
+NGROK_HOST=$(echo "$ADDRESS" | cut -d: -f1)
+NGROK_PORT=$(echo "$ADDRESS" | cut -d: -f2)
 
-now() {
-    date '+%H:%M:%S'
-}
-
-probe_membership() {
-    "$PY_BIN" - <<PY
-import ray
-import sys
-
-address = "$ADDRESS"
-local_ip = "$LOCAL_IP"
-
-try:
-    ray.init(address=address, ignore_reinit_error=True, logging_level="ERROR")
-    nodes = [n for n in ray.nodes() if n.get("Alive")]
-    ips = [n.get("NodeManagerAddress") for n in nodes]
-    local_alive = any(ip == local_ip for ip in ips)
-    print(f"alive_nodes={len(nodes)} local_alive={int(local_alive)} ips={ips}")
-    sys.exit(0 if local_alive else 1)
-except Exception as e:
-    print(f"probe_error={type(e).__name__}: {e}")
-    sys.exit(2)
-finally:
-    try:
-        ray.shutdown()
-    except Exception:
-        pass
-PY
-}
-
-stop_local_ray() {
-    "$RAY_BIN" stop --force >/dev/null 2>&1 || true
-}
+now() { date '+%H:%M:%S'; }
 
 connect_worker() {
-    echo "[$(now)] reconnecting: ray start --address=$ADDRESS"
-    set +e
-    OUTPUT="$($RAY_BIN start --address="$ADDRESS" 2>&1)"
-    RC=$?
-    set -e
-    if [[ $RC -eq 0 ]]; then
-        echo "[$(now)] reconnect success"
-    else
-        echo "[$(now)] reconnect failed (exit $RC)"
-        echo "$OUTPUT" | tail -n 12
-    fi
+    echo "[$(now)] Starting ray worker → $ADDRESS"
+    "$RAY_BIN" stop --force >/dev/null 2>&1 || true
+    sleep 2
+    "$RAY_BIN" start \
+        --address="$ADDRESS" \
+        --num-gpus=1 \
+        --num-cpus=4 \
+        2>&1 | tail -5
+    echo "[$(now)] ray start returned (worker running as daemon)"
 }
 
-trap 'echo "[$(now)] watcher stopped by user"; exit 0' INT TERM
+trap 'echo "[$(now)] Watcher stopped."; exit 0' INT TERM
 
-echo "[$(now)] Node B watcher started"
-echo "[$(now)] address=$ADDRESS local_ip=$LOCAL_IP interval=${INTERVAL}s"
+echo "[$(now)] Node B watcher started — address=$ADDRESS"
+echo "[$(now)] Checking every 10s. Ctrl+C to stop."
+echo ""
+
+# Initial connect
+connect_worker
 
 while true; do
+    sleep 10
+
+    # ── Check 1: is the local raylet process alive? ─────────────────
     if ! pgrep -f "raylet" >/dev/null 2>&1; then
-        echo "[$(now)] local raylet not running"
-        stop_local_ray
+        echo "[$(now)] RAYLET DIED — reconnecting..."
         connect_worker
-        sleep "$INTERVAL"
         continue
     fi
 
-    set +e
-    PROBE_OUTPUT="$(probe_membership 2>&1)"
-    PROBE_RC=$?
-    set -e
-
-    if [[ $PROBE_RC -eq 0 ]]; then
-        echo "[$(now)] healthy $PROBE_OUTPUT"
-    else
-        echo "[$(now)] dropped  $PROBE_OUTPUT"
-        stop_local_ray
+    # ── Check 2: can we still reach Node A's GCS via Ngrok? ─────────
+    # Use nc with a 3s timeout — pure TCP, no Ray connection, no disruption.
+    if ! nc -z -w3 "$NGROK_HOST" "$NGROK_PORT" 2>/dev/null; then
+        echo "[$(now)] NGROK TUNNEL UNREACHABLE — reconnecting..."
         connect_worker
+        continue
     fi
 
-    sleep "$INTERVAL"
+    echo "[$(now)] OK — raylet alive, tunnel reachable"
 done
