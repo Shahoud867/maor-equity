@@ -203,17 +203,39 @@ try:
 except:
     print('NO_TUNNEL')
 " 2>/dev/null || echo "NO_TUNNEL")
-    # Count alive nodes. os._exit(0) skips ray.shutdown() atexit so Node B
-    # stays connected. sys.stdout.flush() is required before os._exit()
-    # because os._exit bypasses normal Python buffer flushing.
+    # Query Ray and write state file — verify_cluster.py reads this file
+    # instead of connecting to Ray directly (which disrupts Node B).
+    # os._exit(0) skips ray.shutdown(); sys.stdout.flush() required because
+    # os._exit bypasses normal Python buffer flushing.
     NODES=$("$VENV/bin/python3" -c "
-import ray, os, sys
+import ray, os, sys, json, time
+
+os.environ['RAY_DISABLE_JEMALLOC']               = '1'
+os.environ['LD_PRELOAD']                         = ''
+os.environ['RAY_ACCEL_ENV_VAR_OVERRIDE_ON_ZERO'] = '0'
+
+STATE_FILE = '/tmp/ray_cluster_state.json'
+
 try:
     ray.init(address='$NODE_IP:6379', ignore_reinit_error=True, logging_level='ERROR')
-    n = len([x for x in ray.nodes() if x.get('Alive')])
+    nodes = ray.nodes()
+    cr    = dict(ray.cluster_resources())
+
+    alive = [n for n in nodes if n.get('Alive')]
+    state = {
+        'ts':        time.time(),
+        'alive':     [{'ip': n.get('NodeManagerAddress',''), 'cpu': n.get('Resources',{}).get('CPU',0), 'gpu': n.get('Resources',{}).get('GPU',0)} for n in alive],
+        'dead_ips':  [n.get('NodeManagerAddress','') for n in nodes if not n.get('Alive')],
+        'cr':        {k: float(v) for k, v in cr.items() if isinstance(v, (int, float))},
+        'cr_keys':   list(cr.keys()),
+    }
+    with open(STATE_FILE, 'w') as f:
+        json.dump(state, f)
+
+    n = len(alive)
     sys.stdout.write(str(n) + '\n')
     sys.stdout.flush()
-except Exception:
+except Exception as e:
     sys.stdout.write('?\n')
     sys.stdout.flush()
 finally:
