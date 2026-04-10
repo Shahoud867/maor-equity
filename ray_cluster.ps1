@@ -283,8 +283,8 @@ done
         -replace '__WSL_TMP__',   $WSL_TMP
 
     # Write with Unix line endings
-    $nodeAScript -replace "`r`n","`n" |
-        [System.IO.File]::WriteAllText("$WIN_TMP\nodeA.sh", $_)
+    $nodeAScriptLf = $nodeAScript -replace "`r`n","`n"
+    [System.IO.File]::WriteAllText("$WIN_TMP\nodeA.sh", $nodeAScriptLf)
 
     wsl chmod +x "$WSL_TMP/nodeA.sh" 2>$null
 
@@ -423,8 +423,8 @@ while true; do
 done
 "@
 
-    $nodeBScript -replace "`r`n","`n" |
-        [System.IO.File]::WriteAllText("$WIN_TMP\nodeB.sh", $_)
+    $nodeBScriptLf = $nodeBScript -replace "`r`n","`n"
+    [System.IO.File]::WriteAllText("$WIN_TMP\nodeB.sh", $nodeBScriptLf)
 
     wsl chmod +x "$WSL_TMP/nodeB.sh" 2>$null
 
