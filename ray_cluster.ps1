@@ -33,8 +33,10 @@ $B_PROJECT = "/mnt/d/University Work/Semester 6/NLP + PDC Project/maor-equity"
 
 # Temp dir - user-writable, no admin needed (works on any machine)
 $WIN_TMP = "$env:USERPROFILE\ray_cluster"
-$WSL_USERNAME = $env:USERNAME
-$WSL_TMP = "/mnt/c/Users/$WSL_USERNAME/ray_cluster"
+# Convert C:\Users\foo  →  /mnt/c/Users/foo  (handles username != foldername)
+$_drive   = ($env:USERPROFILE -split ":\\")[0].ToLower()
+$_relpath = ($env:USERPROFILE -split ":\\")[1] -replace "\\","/"
+$WSL_TMP  = "/mnt/$_drive/$_relpath/ray_cluster"
 
 # ---------------------------------------------------------------------------
 #  BANNER
