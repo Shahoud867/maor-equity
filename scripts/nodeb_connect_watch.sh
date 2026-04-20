@@ -52,6 +52,12 @@ export LD_PRELOAD=""
 export RAY_DISABLE_JEMALLOC=1
 export CUDA_VISIBLE_DEVICES=0
 
+# Add project root to PYTHONPATH so Ray worker processes can import 'agents'
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PROJECT_ROOT="$(dirname "$SCRIPT_DIR")"
+export PYTHONPATH="$PROJECT_ROOT:${PYTHONPATH:-}"
+echo "  PYTHONPATH → $PROJECT_ROOT"
+
 HEAD_HOST=$(echo "$ADDRESS" | cut -d: -f1)
 HEAD_PORT=$(echo "$ADDRESS" | cut -d: -f2)
 
