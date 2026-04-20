@@ -31,9 +31,10 @@ $A_PROJECT = "/mnt/c/Users/shaho/OneDrive - FAST National University/Attachments
 $B_VENV    = "/mnt/d/University Work/Semester 6/NLP + PDC Project/maor-equity/venv"
 $B_PROJECT = "/mnt/d/University Work/Semester 6/NLP + PDC Project/maor-equity"
 
-# Temp dir - user-writable, no admin needed
-$WIN_TMP = "C:\Users\shaho\ray_cluster"
-$WSL_TMP = "/mnt/c/Users/shaho/ray_cluster"
+# Temp dir - user-writable, no admin needed (works on any machine)
+$WIN_TMP = "$env:USERPROFILE\ray_cluster"
+$WSL_USERNAME = $env:USERNAME
+$WSL_TMP = "/mnt/c/Users/$WSL_USERNAME/ray_cluster"
 
 # ---------------------------------------------------------------------------
 #  BANNER
@@ -368,7 +369,7 @@ if ($Role -eq "B") {
 
     # ── Enable WSL2 mirrored networking (required for Tailscale in WSL) ──────
     Write-Host "  [NODE B] Configuring WSL2 mirrored networking..." -ForegroundColor Cyan
-    $wslCfg = "$env:USERPROFILE\.wslconfig"
+    $wslCfg = Join-Path $env:USERPROFILE ".wslconfig"
     $cfgContent = "[wsl2]`nnetworkingMode=mirrored`n"
     if (-not (Test-Path $wslCfg) -or (Get-Content $wslCfg -Raw) -notmatch 'mirrored') {
         Set-Content -Path $wslCfg -Value $cfgContent -Encoding UTF8
