@@ -1,0 +1,12 @@
+{
+  "total_vram_mb": 4096.0,
+  "baseline_mb": 0.0,
+  "after_finbert_mb": 525.0,
+  "after_phi3_mb": 3261.0,
+  "peak_mb": 3261.0,
+  "delta_finbert_mb": 525.0,
+  "delta_phi3_mb": 2736.0,
+  "budget_limit_mb": 4096.0,
+  "headroom_mb": 835.0,
+  "budget_ok": true
+}
