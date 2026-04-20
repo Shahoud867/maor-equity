@@ -1,0 +1,16 @@
+# Force LF for all shell scripts — prevents Windows CRLF breaking bash
+*.sh        text eol=lf
+*.bash      text eol=lf
+
+# Python and config files — LF
+*.py        text eol=lf
+*.json      text eol=lf
+*.txt       text eol=lf
+*.md        text eol=lf
+*.yml       text eol=lf
+*.yaml      text eol=lf
+
+# Windows scripts — CRLF is fine
+*.ps1       text eol=crlf
+*.bat       text eol=crlf
+*.cmd       text eol=crlf
