@@ -12,16 +12,21 @@ class FinBERTActor:
     """One FinBERT classifier for one sentiment dimension."""
 
     def __init__(self, checkpoint: str, dimension: str, min_confidence: float = 0.60):
-        from transformers import pipeline
+        from transformers import (AutoTokenizer, AutoModelForSequenceClassification,
+                                   BitsAndBytesConfig, pipeline)
         self.dimension = dimension
         self.min_conf  = min_confidence
-        import torch
-        self.pipe = pipeline(
-            "text-classification", model=checkpoint,
-            device=0, top_k=None,
-            torch_dtype=torch.float16,   # FP16: 220 MB/model vs 440 MB FP32
+        # 8-bit quantization: ~150 MB/model vs ~440 MB FP32.
+        # device_map={"": 0} explicitly places on GPU 0 without module splitting
+        # (BERT doesn't support device_map="auto" — no _no_split_modules attr).
+        bnb = BitsAndBytesConfig(load_in_8bit=True)
+        tok = AutoTokenizer.from_pretrained(checkpoint)
+        mdl = AutoModelForSequenceClassification.from_pretrained(
+            checkpoint, quantization_config=bnb, device_map={"": 0}
         )
-        print(f"[FinBERTActor:{dimension}] loaded {checkpoint}")
+        self.pipe = pipeline("text-classification", model=mdl, tokenizer=tok,
+                             top_k=None)
+        print(f"[FinBERTActor:{dimension}] loaded {checkpoint} (8-bit)")
 
     def classify_batch(self, texts: list) -> dict:
         if not texts:

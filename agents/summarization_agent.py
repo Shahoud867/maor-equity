@@ -3,7 +3,6 @@ summarization_agent.py  —  Node B (GPU)
 Chunked map-reduce summarization with Phi-3-mini-4k-instruct (4-bit).
 """
 import ray
-import torch
 
 
 @ray.remote(num_gpus=0.02)  # tiny fraction forces Node B placement (near shared model)

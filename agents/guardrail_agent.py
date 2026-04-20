@@ -21,8 +21,16 @@ class Phi3ModelActor:
             "microsoft/Phi-3-mini-4k-instruct",
             trust_remote_code=True,
         )
+        import torch
         from transformers import BitsAndBytesConfig
-        bnb = BitsAndBytesConfig(load_in_4bit=True)
+        # NF4 + double quantization: quantizes the quantization constants too.
+        # Saves ~0.37 bits/param extra → ~175 MB less than plain 4-bit on 3.8B model.
+        bnb = BitsAndBytesConfig(
+            load_in_4bit=True,
+            bnb_4bit_quant_type="nf4",
+            bnb_4bit_use_double_quant=True,
+            bnb_4bit_compute_dtype=torch.bfloat16,
+        )
         self.mdl = AutoModelForCausalLM.from_pretrained(
             "microsoft/Phi-3-mini-4k-instruct",
             quantization_config=bnb,

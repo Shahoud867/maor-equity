@@ -154,7 +154,7 @@ if __name__ == "__main__":
 
     # ── Stage 3: Load 3× FinBERT ─────────────────────────────────────────
     stage_header(3, "Loading 3x FinBERT actors onto Node B GPU")
-    print("  (Each actor: ProsusAI/finbert or finbert-tone, ~220 MB each in FP16)")
+    print("  (Each actor: ProsusAI/finbert or finbert-tone, ~150 MB each in INT8)")
 
     from agents.sentiment_agent import FinBERTActor
 
@@ -186,11 +186,11 @@ if __name__ == "__main__":
     after_finbert_mb = get_vram_used_mb()
     delta_finbert    = after_finbert_mb - baseline_mb
     print(f"\n  After 3x FinBERT: {vram_bar(after_finbert_mb, total_mb)}")
-    print(f"  Delta            : +{delta_finbert:.0f} MB  (expected ~660 MB in FP16)")
+    print(f"  Delta            : +{delta_finbert:.0f} MB  (expected ~450 MB in INT8)")
 
     # ── Stage 4: Load shared Phi-3-mini ──────────────────────────────────
     stage_header(4, "Loading shared Phi-3-mini-4k-instruct (Node B GPU)")
-    print("  (3.8 GB model loaded in 4-bit → ~2.1 GB VRAM — this takes 1-3 min)")
+    print("  (NF4 + double quant → ~2.0 GB VRAM — this takes 1-3 min)")
 
     from agents.guardrail_agent    import Phi3ModelActor, GuardrailAgent
     from agents.summarization_agent import SummarizationAgent
