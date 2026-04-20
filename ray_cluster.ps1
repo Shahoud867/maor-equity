@@ -22,10 +22,14 @@ Set-StrictMode -Off
 $ErrorActionPreference = "Stop"
 
 # ---------------------------------------------------------------------------
-#  CONFIG  (Node A paths - do not change)
+#  CONFIG
 # ---------------------------------------------------------------------------
 $A_VENV    = "/mnt/c/Users/shaho/OneDrive - FAST National University/Attachments/@Fast/Semester 6/PDC + NLP/maor-equity/venv"
 $A_PROJECT = "/mnt/c/Users/shaho/OneDrive - FAST National University/Attachments/@Fast/Semester 6/PDC + NLP/maor-equity"
+
+# Node B paths
+$B_VENV    = "/mnt/d/University Work/Semester 6/NLP + PDC Project/maor-equity/venv"
+$B_PROJECT = "/mnt/d/University Work/Semester 6/NLP + PDC Project/maor-equity"
 
 # Temp dir - user-writable, no admin needed
 $WIN_TMP = "C:\Users\shaho\ray_cluster"
@@ -362,12 +366,33 @@ if ($Role -eq "B") {
         exit 1
     }
 
+    # ── Enable WSL2 mirrored networking (required for Tailscale in WSL) ──────
+    Write-Host "  [NODE B] Configuring WSL2 mirrored networking..." -ForegroundColor Cyan
+    $wslCfg = "$env:USERPROFILE\.wslconfig"
+    $cfgContent = "[wsl2]`nnetworkingMode=mirrored`n"
+    if (-not (Test-Path $wslCfg) -or (Get-Content $wslCfg -Raw) -notmatch 'mirrored') {
+        Set-Content -Path $wslCfg -Value $cfgContent -Encoding UTF8
+        Write-Host "  .wslconfig written - shutting down WSL to apply..." -ForegroundColor Yellow
+        wsl --shutdown 2>$null
+        Start-Sleep -Seconds 3
+        Write-Host "  WSL restarted with mirrored networking." -ForegroundColor Green
+    } else {
+        Write-Host "  Already configured." -ForegroundColor Green
+    }
+
+    # ── Open firewall for Ray ports on Tailscale range ────────────────────────
+    Write-Host "  [NODE B] Adding firewall rules for Ray ports..." -ForegroundColor Cyan
+    New-NetFirewallRule -DisplayName 'Ray GCS Tailscale'     -Direction Inbound -Protocol TCP -LocalPort 6379       -RemoteAddress '100.64.0.0/10' -Action Allow -ErrorAction SilentlyContinue | Out-Null
+    New-NetFirewallRule -DisplayName 'Ray Worker Tailscale'  -Direction Inbound -Protocol TCP -LocalPort 10001      -RemoteAddress '100.64.0.0/10' -Action Allow -ErrorAction SilentlyContinue | Out-Null
+    New-NetFirewallRule -DisplayName 'Ray Ports Tailscale'   -Direction Inbound -Protocol TCP -LocalPort 20000-29999 -RemoteAddress '100.64.0.0/10' -Action Allow -ErrorAction SilentlyContinue | Out-Null
+    Write-Host "  Firewall rules added." -ForegroundColor Green
+
     # ── Find Ray binary in WSL ─────────────────────────────────────────────
     Write-Host ""
     Write-Host "  [NODE B] Finding Ray in WSL..." -NoNewline
 
     $rayBin = wsl bash -c @"
-for p in ~/maor-equity/venv/bin/ray ~/venv/bin/ray /usr/local/bin/ray; do
+for p in "/mnt/d/University Work/Semester 6/NLP + PDC Project/maor-equity/venv/bin/ray" ~/maor-equity/venv/bin/ray ~/venv/bin/ray /usr/local/bin/ray; do
     [ -x "`$p" ] && echo "`$p" && exit 0
 done
 which ray 2>/dev/null || true
