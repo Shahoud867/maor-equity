@@ -17,8 +17,7 @@ class FinBERTActor:
         self.min_conf  = min_confidence
         self.pipe = pipeline(
             "text-classification", model=checkpoint,
-            model_kwargs={"load_in_4bit": True},
-            device_map="auto", return_all_scores=True,
+            device=0, return_all_scores=True,
         )
         print(f"[FinBERTActor:{dimension}] loaded {checkpoint}")
 
