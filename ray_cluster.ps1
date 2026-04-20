@@ -392,13 +392,24 @@ if ($Role -eq "B") {
     Write-Host ""
     Write-Host "  [NODE B] Finding Ray in WSL..." -NoNewline
 
-    $rayBin = wsl bash -c @"
-for p in "/mnt/d/University Work/Semester 6/NLP + PDC Project/maor-equity/venv/bin/ray" ~/maor-equity/venv/bin/ray ~/venv/bin/ray /usr/local/bin/ray; do
-    [ -x "`$p" ] && echo "`$p" && exit 0
-done
-which ray 2>/dev/null || true
-"@ 2>$null
-    $rayBin = ($rayBin | Where-Object { $_ -match '/ray' } | Select-Object -First 1).Trim()
+    $rayBin = wsl bash -lc "[ -x '/mnt/d/University Work/Semester 6/NLP + PDC Project/maor-equity/venv/bin/ray' ] && echo '/mnt/d/University Work/Semester 6/NLP + PDC Project/maor-equity/venv/bin/ray'" 2>$null
+    if (-not $rayBin) {
+        $rayBin = wsl bash -lc '[ -x "$HOME/maor-equity/venv/bin/ray" ] && echo "$HOME/maor-equity/venv/bin/ray"' 2>$null
+    }
+    if (-not $rayBin) {
+        $rayBin = wsl bash -lc '[ -x "$HOME/venv/bin/ray" ] && echo "$HOME/venv/bin/ray"' 2>$null
+    }
+    if (-not $rayBin) {
+        $rayBin = wsl bash -lc "[ -x '/usr/local/bin/ray' ] && echo '/usr/local/bin/ray'" 2>$null
+    }
+    if (-not $rayBin) {
+        $rayBin = wsl bash -lc "which ray 2>/dev/null || true" 2>$null
+    }
+
+    $rayBin = ($rayBin | Where-Object { $_ -match '/ray' } | Select-Object -First 1)
+    if ($rayBin) {
+        $rayBin = $rayBin.Trim()
+    }
 
     if (-not $rayBin) {
         Write-Host " NOT FOUND" -ForegroundColor Red
