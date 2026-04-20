@@ -1,115 +1,180 @@
 <#
 .SYNOPSIS
-    Ray Cluster Setup â€” maor-equity project
-    Run on Node A (CPU/head) OR Node B (GPU/worker)
+    Ray Cluster Setup using Tailscale VPN.
+    Tailscale gives both WSL2 instances stable 100.x.x.x IPs with direct
+    peer-to-peer tunnels - no heartbeat drops, no reconnect loops needed.
 
-.EXAMPLE
-    Node A:  .\ray_cluster.ps1 -Role A
-    Node B:  .\ray_cluster.ps1 -Role B -Address "0.tcp.ap.ngrok.io:12345"
-    (If you omit parameters the script will prompt you)
+.HOW TO USE
+    STEP 1  Both PCs: install Tailscale for Windows from https://tailscale.com/download
+            Sign in with GOOGLE or GITHUB - use the SAME account on both PCs.
+
+    STEP 2  Node A PC:  .\ray_cluster.ps1 -Role A
+    STEP 3  Node B PC:  .\ray_cluster.ps1 -Role B   (will prompt for Node A IP)
 #>
 
 param(
     [ValidateSet("A","B","")]
-    [string]$Role    = "",
-    [string]$Address = ""      # Node B only: Ngrok address from Node A
+    [string]$Role        = "",
+    [string]$TailscaleIP = ""   # Node B: paste Node A's 100.x.x.x IP here
 )
 
-# â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-#  CONFIG  (Node A paths â€” do not change)
-# â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-$A_VENV_WSL   = "/mnt/c/Users/shaho/OneDrive - FAST National University/Attachments/@Fast/Semester 6/PDC + NLP/maor-equity/venv"
-$A_PROJECT_WSL= "/mnt/c/Users/shaho/OneDrive - FAST National University/Attachments/@Fast/Semester 6/PDC + NLP/maor-equity"
-$A_NODE_IP    = "172.26.19.0"
+Set-StrictMode -Off
+$ErrorActionPreference = "Stop"
 
-# Temp dir with NO spaces â€” accessible from WSL as /mnt/c/ProgramData/ray_cluster/
-$WIN_TMP = "C:\ProgramData\ray_cluster"
-$WSL_TMP = "/mnt/c/ProgramData/ray_cluster"
+# ---------------------------------------------------------------------------
+#  CONFIG  (Node A paths - do not change)
+# ---------------------------------------------------------------------------
+$A_VENV    = "/mnt/c/Users/shaho/OneDrive - FAST National University/Attachments/@Fast/Semester 6/PDC + NLP/maor-equity/venv"
+$A_PROJECT = "/mnt/c/Users/shaho/OneDrive - FAST National University/Attachments/@Fast/Semester 6/PDC + NLP/maor-equity"
 
-# â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+# Temp dir - user-writable, no admin needed
+$WIN_TMP = "C:\Users\shaho\ray_cluster"
+$WSL_TMP = "/mnt/c/Users/shaho/ray_cluster"
+
+# ---------------------------------------------------------------------------
 #  BANNER
-# â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+# ---------------------------------------------------------------------------
 Clear-Host
 Write-Host ""
-Write-Host "  â•”â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•—" -ForegroundColor Cyan
-Write-Host "  â•‘      maor-equity  â€”  Ray Cluster Setup              â•‘" -ForegroundColor Cyan
-Write-Host "  â•šâ•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•" -ForegroundColor Cyan
+Write-Host "  ============================================================" -ForegroundColor Cyan
+Write-Host "      maor-equity  --  Ray Cluster Setup (Tailscale VPN)     " -ForegroundColor Cyan
+Write-Host "  ============================================================" -ForegroundColor Cyan
+Write-Host ""
+Write-Host "  Tailscale VPN: stable peer-to-peer tunnel, no heartbeat drops." -ForegroundColor Gray
+Write-Host "  Tailscale gives both machines stable 100.x.x.x IPs with"   -ForegroundColor Gray
+Write-Host "  direct encrypted tunnels. No more disconnections."          -ForegroundColor Gray
 Write-Host ""
 
-# â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+# ---------------------------------------------------------------------------
+#  PRE-FLIGHT: Tailscale Windows check
+# ---------------------------------------------------------------------------
+Write-Host "  [CHECK] Tailscale on Windows..." -NoNewline
+$tsExe = "C:\Program Files\Tailscale\tailscale.exe"
+if (-not (Test-Path $tsExe)) {
+    # Try common alternate path
+    $tsExe = "$env:ProgramFiles\Tailscale\tailscale.exe"
+}
+if (Test-Path $tsExe) {
+    Write-Host " found" -ForegroundColor Green
+    try {
+        $tsStatus = & $tsExe status --json 2>$null | ConvertFrom-Json
+        $windowsTS_IP = $tsStatus.TailscaleIPs | Where-Object { $_ -match "^100\." } | Select-Object -First 1
+        if ($windowsTS_IP) {
+            Write-Host "  [CHECK] Windows Tailscale IP: $windowsTS_IP" -ForegroundColor Green
+        }
+    } catch {}
+} else {
+    Write-Host " NOT INSTALLED" -ForegroundColor Yellow
+    Write-Host ""
+    Write-Host "  ACTION REQUIRED:" -ForegroundColor Yellow
+    Write-Host "    1. Download Tailscale: https://tailscale.com/download/windows" -ForegroundColor White
+    Write-Host "    2. Install and sign in (use same Google/GitHub account on BOTH PCs)" -ForegroundColor White
+    Write-Host "    3. Re-run this script" -ForegroundColor White
+    Write-Host ""
+    $open = Read-Host "  Open Tailscale download page now? (Y/N)"
+    if ($open -eq "Y" -or $open -eq "y") {
+        Start-Process "https://tailscale.com/download/windows"
+    }
+    exit 1
+}
+
+# ---------------------------------------------------------------------------
+#  WSL CHECK
+# ---------------------------------------------------------------------------
+Write-Host "  [CHECK] WSL..." -NoNewline
+try {
+    $null = wsl echo ok 2>&1
+    Write-Host " found" -ForegroundColor Green
+} catch {
+    Write-Host " NOT FOUND" -ForegroundColor Red
+    Write-Host "  Run in PowerShell Admin: wsl --install" -ForegroundColor Yellow
+    exit 1
+}
+
+# ---------------------------------------------------------------------------
 #  ROLE SELECTION
-# â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+# ---------------------------------------------------------------------------
 if (-not $Role) {
+    Write-Host ""
     Write-Host "  Which node are you?" -ForegroundColor Yellow
-    Write-Host "    A = Node A  (CPU/head â€” runs Ray + Ngrok, i232515's PC)"
-    Write-Host "    B = Node B  (GPU/worker â€” connects to Node A, i232634's PC)"
+    Write-Host "    A = Node A  (i232515 - CPU head node, your PC)"
+    Write-Host "    B = Node B  (i232634 - GPU worker, partner PC)"
     Write-Host ""
     $Role = (Read-Host "  Enter A or B").Trim().ToUpper()
 }
-
 if ($Role -notin @("A","B")) {
-    Write-Host "  ERROR: Enter A or B." -ForegroundColor Red
-    exit 1
+    Write-Host "  ERROR: must be A or B" -ForegroundColor Red; exit 1
 }
 
-# â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-#  WSL CHECK
-# â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-Write-Host "  Checking WSL..." -NoNewline
-try {
-    $null = wsl echo ok 2>&1
-    Write-Host " OK" -ForegroundColor Green
-} catch {
-    Write-Host " MISSING" -ForegroundColor Red
-    Write-Host "  Install WSL2:  wsl --install" -ForegroundColor Yellow
-    exit 1
-}
-
-# â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-#  CREATE TEMP DIR
-# â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+# ---------------------------------------------------------------------------
+#  TEMP DIR
+# ---------------------------------------------------------------------------
 if (-not (Test-Path $WIN_TMP)) {
     New-Item -ItemType Directory -Path $WIN_TMP -Force | Out-Null
 }
 
-# â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-#  HELPER: open a new persistent WSL window
-# â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-function Open-WslWindow {
-    param([string]$Title, [string]$WslScript)
+# ---------------------------------------------------------------------------
+#  HELPER: write file with Unix line endings
+# ---------------------------------------------------------------------------
+function Write-UnixFile {
+    param([string]$Path, [string]$Content)
+    $utf8 = [System.Text.UTF8Encoding]::new($false)   # no BOM
+    [System.IO.File]::WriteAllText($Path, ($Content -replace "`r`n","`n"), $utf8)
+}
 
-    # Try Windows Terminal first, fall back to cmd
-    $hasWT = Get-Command wt -ErrorAction SilentlyContinue
-    if ($hasWT) {
-        Start-Process wt -ArgumentList `
-            "new-tab", "--title", "`"$Title`"", "--", `
-            "wsl.exe", "bash", $WslScript
+# ---------------------------------------------------------------------------
+#  HELPER: open a new persistent WSL terminal window
+# ---------------------------------------------------------------------------
+function Open-WslWindow {
+    param([string]$Title, [string]$Script)
+    # Run the script file directly - no bash -c quoting issues
+    if (Get-Command wt -ErrorAction SilentlyContinue) {
+        Start-Process wt -ArgumentList "new-tab","--title","""$Title""","--","wsl.exe","bash",$Script
     } else {
-        Start-Process cmd -ArgumentList "/k", "wsl bash $WslScript"
+        Start-Process cmd -ArgumentList "/k","wsl bash $Script"
     }
 }
 
-# â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+# ===========================================================================
 #  NODE A
-# â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+# ===========================================================================
 if ($Role -eq "A") {
 
     Write-Host ""
-    Write-Host "  [NODE A] Writing startup script..." -ForegroundColor Cyan
+    Write-Host "  [NODE A] Getting Tailscale IP from Windows..." -ForegroundColor Cyan
 
-    # â”€â”€ Write the Node A bash script â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-    $nodeAScript = @'
+    # Get Node A's Windows Tailscale IP
+    $TS_IP = ""
+    try {
+        $s = & $tsExe status --json 2>$null | ConvertFrom-Json
+        $TS_IP = $s.TailscaleIPs | Where-Object { $_ -match "^100\." } | Select-Object -First 1
+    } catch {}
+
+    if (-not $TS_IP) {
+        Write-Host "  ERROR: Could not get Tailscale IP." -ForegroundColor Red
+        Write-Host "  Make sure Tailscale is running and you are logged in." -ForegroundColor Yellow
+        Write-Host "  Open Tailscale system tray icon and click 'Connect'." -ForegroundColor Yellow
+        exit 1
+    }
+
+    Write-Host "  Node A Tailscale IP: $TS_IP" -ForegroundColor Green
+    Write-Host ""
+    Write-Host "  [NODE A] Writing startup script to $WIN_TMP\nodeA.sh..." -ForegroundColor Cyan
+
+    # -----------------------------------------------------------------------
+    #  NODE A BASH SCRIPT
+    # -----------------------------------------------------------------------
+    $scriptA = @'
 #!/usr/bin/env bash
-# Node A startup â€” Ray head + Ngrok + state-file monitor
-# Written by ray_cluster.ps1 â€” do not edit manually
+# Node A: Ray head startup via Tailscale
+# Auto-generated by ray_cluster.ps1
 
 set -uo pipefail
 
-VENV="__A_VENV__"
+VENV="PLACEHOLDER_VENV"
 RAY="$VENV/bin/ray"
-PROJECT="__A_PROJECT__"
-NODE_IP="__A_NODE_IP__"
-WSL_TMP="__WSL_TMP__"
+TS_IP="PLACEHOLDER_TS_IP"
+WSL_TMP="PLACEHOLDER_WSL_TMP"
 
 export LD_PRELOAD=""
 export RAY_DISABLE_JEMALLOC=1
@@ -117,38 +182,46 @@ export RAY_raylet_start_wait_time_s=60
 export RAY_GCS_SERVER_REQUEST_TIMEOUT_SECONDS=60
 
 echo ""
-echo "  â•”â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•—"
-echo "  â•‘       NODE A  â€”  Ray + Ngrok Startup            â•‘"
-echo "  â•šâ•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•"
+echo "  ============================================================"
+echo "  NODE A -- Ray Head (Tailscale IP: $TS_IP)"
+echo "  ============================================================"
 echo ""
 
-# â”€â”€ Step 1: Kill everything â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-echo "  [1/4] Killing existing Ray / Ngrok..."
+# ── Verify Tailscale reachable ──────────────────────────────────────────
+echo "  [1/4] Checking Tailscale..."
+if ! ping -c1 -W2 "$TS_IP" >/dev/null 2>&1; then
+    echo "  WARNING: Cannot ping Tailscale IP $TS_IP from WSL."
+    echo "  This is OK on some systems -- continuing anyway."
+fi
+echo "  Tailscale IP: $TS_IP"
+
+# ── Kill everything ─────────────────────────────────────────────────────
+echo ""
+echo "  [2/4] Stopping existing Ray..."
 "$RAY" stop --force 2>/dev/null || true
 sleep 1
-pkill -9 -f gcs_server  2>/dev/null || true
-pkill -9 -f raylet       2>/dev/null || true
-pkill -9 -f plasma_store 2>/dev/null || true
-pkill -9 -f ngrok        2>/dev/null || true
+pkill -9 -f gcs_server   2>/dev/null || true
+pkill -9 -f raylet        2>/dev/null || true
+pkill -9 -f plasma_store  2>/dev/null || true
 sleep 2
 rm -rf /tmp/ray /tmp/ray_* /tmp/plasma_store_socket* /tmp/session_* \
-       /tmp/ray_cluster_state.json /tmp/ray_ngrok_address.txt 2>/dev/null || true
+       /tmp/ray_cluster_state.json 2>/dev/null || true
 sleep 1
 
 if ss -tlnp 2>/dev/null | grep -q ':6379'; then
-    echo "  ERROR: port 6379 still in use. Run: sudo fuser -k 6379/tcp"
-    read -rp "Press Enter to exit..." && exit 1
+    echo "  ERROR: port 6379 still occupied. Run: sudo fuser -k 6379/tcp"
+    read -rp "  Press Enter to exit..." && exit 1
 fi
 echo "  Port 6379 free."
 
-# â”€â”€ Step 2: Start Ray head â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+# ── Start Ray head ──────────────────────────────────────────────────────
 echo ""
-echo "  [2/4] Starting Ray head on $NODE_IP:6379..."
+echo "  [3/4] Starting Ray head on $TS_IP:6379..."
 
 "$RAY" start \
     --head \
     --port=6379 \
-    --node-ip-address="$NODE_IP" \
+    --node-ip-address="$TS_IP" \
     --disable-usage-stats \
     --include-dashboard=false \
     --num-cpus=2 \
@@ -159,291 +232,269 @@ echo "  [2/4] Starting Ray head on $NODE_IP:6379..."
 if [ $? -ne 0 ]; then
     echo ""
     echo "  ERROR: Ray failed to start."
-    echo "  Tip: close this window, reopen a fresh WSL terminal, and run again."
-    read -rp "  Press Enter to exit..." && exit 1
+    echo "  Close this window, reopen a fresh WSL terminal, and re-run."
+    read -rp "  Press Enter..." && exit 1
 fi
 
 sleep 3
 
 if ! ss -tlnp 2>/dev/null | grep -q ':6379'; then
     echo "  ERROR: GCS did not bind to :6379"
-    read -rp "  Press Enter to exit..." && exit 1
-fi
-echo "  Ray GCS listening on :6379  âœ“"
-
-# â”€â”€ Step 3: Start Ngrok â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-echo ""
-echo "  [3/4] Starting Ngrok TCP tunnel..."
-nohup ngrok tcp 6379 --log=stdout > /tmp/ngrok.log 2>&1 &
-sleep 2
-
-TUNNEL=""
-for i in $(seq 1 30); do
-    TUNNEL=$(curl -s http://localhost:4040/api/tunnels 2>/dev/null \
-        | python3 -c "
-import sys,json
-try:
-    d=json.load(sys.stdin); t=d.get('tunnels',[])
-    print(t[0]['public_url'] if t else '')
-except: print('')
-" 2>/dev/null || true)
-    [ -n "$TUNNEL" ] && break
-    printf "  Waiting for tunnel... %d/30\r" "$i"
-    sleep 1
-done
-
-if [ -z "$TUNNEL" ]; then
-    echo ""
-    echo "  ERROR: Ngrok did not start."
-    echo "  Log:"
-    cat /tmp/ngrok.log | tail -20
-    read -rp "  Press Enter to exit..." && exit 1
+    read -rp "  Press Enter..." && exit 1
 fi
 
-NGROK_HOST=$(echo "$TUNNEL" | sed 's|tcp://||' | cut -d: -f1)
-NGROK_PORT=$(echo "$TUNNEL" | sed 's|tcp://||' | cut -d: -f2)
+# Check raylet alive
+RAYLET_COUNT=$(ps aux 2>/dev/null | grep '[r]aylet' | grep -v defunct | wc -l)
+echo "  Ray GCS: UP on $TS_IP:6379"
+echo "  Raylet processes: $RAYLET_COUNT"
 
-# Write address to file so PowerShell can read it
-echo "$NGROK_HOST:$NGROK_PORT" > /tmp/ray_ngrok_address.txt
-
+# ── Print connection info ────────────────────────────────────────────────
 echo ""
-echo "  â•”â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•—"
-echo "  â•‘                   NODE A IS READY  âœ“                       â•‘"
-echo "  â• â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•£"
-echo "  â•‘                                                              â•‘"
-echo "  â•‘  Tell Node B to run (PowerShell):                           â•‘"
-printf "  â•‘    .\\ray_cluster.ps1 -Role B -Address %s\n" "$NGROK_HOST:$NGROK_PORT"
-echo "  â•‘                                                              â•‘"
-echo "  â•‘  OR in WSL on Node B:                                       â•‘"
-echo "  â•‘    export LD_PRELOAD=''                                      â•‘"
-echo "  â•‘    export RAY_DISABLE_JEMALLOC=1                             â•‘"
-echo "  â•‘    export CUDA_VISIBLE_DEVICES=0                             â•‘"
-printf "  â•‘    ray start --address=%s \\\\\n" "$NGROK_HOST:$NGROK_PORT"
-echo "  â•‘          --num-gpus=1 --num-cpus=4                           â•‘"
-echo "  â•‘                                                              â•‘"
-printf "  â•‘  Full tunnel: %s\n" "$TUNNEL"
-echo "  â•‘                                                              â•‘"
-echo "  â• â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•£"
-echo "  â•‘  KEEP THIS WINDOW OPEN â€” closing it stops Ray               â•‘"
-echo "  â•šâ•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•"
+echo "  ============================================================"
+echo "  NODE A IS READY -- Send this to Node B:"
+echo "  ============================================================"
+echo ""
+echo "  PowerShell command for Node B:"
+echo "    .\\ray_cluster.ps1 -Role B -TailscaleIP $TS_IP"
+echo ""
+echo "  OR manual WSL command for Node B:"
+echo "    export LD_PRELOAD=''"
+echo "    export RAY_DISABLE_JEMALLOC=1"
+echo "    export CUDA_VISIBLE_DEVICES=0"
+echo "    ray start --address=$TS_IP:6379 --num-gpus=1 --num-cpus=4"
+echo ""
+echo "  ============================================================"
+echo "  KEEP THIS WINDOW OPEN -- closing it stops Ray"
+echo "  ============================================================"
 echo ""
 
-# â”€â”€ Step 4: Monitor loop â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+# ── Monitor loop ────────────────────────────────────────────────────────
 echo "  [4/4] Monitoring every 30s (Ctrl+C stops monitor, Ray stays up):"
-echo "  â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€"
+echo "  ------------------------------------------------------------------"
 
 while true; do
     sleep 30
     NOW=$(date '+%H:%M:%S')
 
-    if ss -tlnp 2>/dev/null | grep -q ':6379'; then GCS="Ray:UP"; else GCS="Ray:DOWN!"; fi
+    # Check GCS
+    if ss -tlnp 2>/dev/null | grep -q ':6379'; then
+        GCS_STATUS="Ray:UP"
+    else
+        GCS_STATUS="Ray:DOWN"
+    fi
 
-    CURR=$(curl -s http://localhost:4040/api/tunnels 2>/dev/null \
-        | python3 -c "
-import sys,json
-try:
-    d=json.load(sys.stdin); t=d.get('tunnels',[])
-    print(t[0]['public_url'].replace('tcp://','') if t else 'NO_TUNNEL')
-except: print('?')
-" 2>/dev/null || echo "?")
-
+    # Count nodes + write state file
     NODES=$("$VENV/bin/python3" -c "
 import ray, os, sys, json, time
 os.environ['RAY_DISABLE_JEMALLOC']='1'
 os.environ['LD_PRELOAD']=''
 os.environ['RAY_ACCEL_ENV_VAR_OVERRIDE_ON_ZERO']='0'
 try:
-    ray.init(address='${NODE_IP}:6379', ignore_reinit_error=True, logging_level='ERROR')
-    nodes=ray.nodes(); cr=dict(ray.cluster_resources())
-    alive=[n for n in nodes if n.get('Alive')]
-    state={
-        'ts':time.time(),
-        'alive':[{'ip':n.get('NodeManagerAddress',''),'cpu':n.get('Resources',{}).get('CPU',0),'gpu':n.get('Resources',{}).get('GPU',0)} for n in alive],
+    ray.init(address='${TS_IP}:6379', ignore_reinit_error=True, logging_level='ERROR')
+    nodes = ray.nodes()
+    cr    = dict(ray.cluster_resources())
+    alive = [n for n in nodes if n.get('Alive')]
+    state = {
+        'ts':      time.time(),
+        'alive':   [{'ip': n.get('NodeManagerAddress',''), 'cpu': n.get('Resources',{}).get('CPU',0), 'gpu': n.get('Resources',{}).get('GPU',0)} for n in alive],
         'dead_ips':[n.get('NodeManagerAddress','') for n in nodes if not n.get('Alive')],
-        'cr':{k:float(v) for k,v in cr.items() if isinstance(v,(int,float))},
-        'cr_keys':list(cr.keys())
+        'cr':      {k: float(v) for k, v in cr.items() if isinstance(v,(int,float))},
+        'cr_keys': list(cr.keys()),
     }
     with open('/tmp/ray_cluster_state.json','w') as f: json.dump(state,f)
-    sys.stdout.write(str(len(alive))+'\n'); sys.stdout.flush()
-except:
-    sys.stdout.write('?\n'); sys.stdout.flush()
+    sys.stdout.write(str(len(alive))+'\n')
+    sys.stdout.flush()
+except Exception as e:
+    sys.stdout.write('?\n')
+    sys.stdout.flush()
 finally:
     os._exit(0)
 " 2>/dev/null)
 
-    echo "  [$NOW] $GCS | Ngrok: $CURR | Alive nodes: $NODES"
+    echo "  [$NOW] $GCS_STATUS | Alive nodes: $NODES | Head: $TS_IP:6379"
 done
+
+echo ""
+read -rp "  === Script ended. Press Enter to close ==="
 '@
 
-    # Replace placeholders
-    $nodeAScript = $nodeAScript `
-        -replace '__A_VENV__',    $A_VENV_WSL `
-        -replace '__A_PROJECT__', $A_PROJECT_WSL `
-        -replace '__A_NODE_IP__', $A_NODE_IP `
-        -replace '__WSL_TMP__',   $WSL_TMP
+    # Inject variables
+    $scriptA = $scriptA `
+        -replace 'PLACEHOLDER_VENV',    $A_VENV `
+        -replace 'PLACEHOLDER_TS_IP',   $TS_IP `
+        -replace 'PLACEHOLDER_WSL_TMP', $WSL_TMP
 
-    # Write with Unix line endings
-    $nodeAScriptLf = $nodeAScript -replace "`r`n","`n"
-    [System.IO.File]::WriteAllText("$WIN_TMP\nodeA.sh", $nodeAScriptLf)
-
+    Write-UnixFile -Path "$WIN_TMP\nodeA.sh" -Content $scriptA
     wsl chmod +x "$WSL_TMP/nodeA.sh" 2>$null
 
-    Write-Host "  [NODE A] Opening WSL window..." -ForegroundColor Cyan
-    Open-WslWindow -Title "NODE A â€” Ray Head" -WslScript "$WSL_TMP/nodeA.sh"
+    Open-WslWindow -Title "NODE A - Ray Head" -Script "$WSL_TMP/nodeA.sh"
 
     Write-Host ""
-    Write-Host "  â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•" -ForegroundColor Green
-    Write-Host "  A new terminal window opened running Ray + Ngrok." -ForegroundColor Green
+    Write-Host "  ============================================================" -ForegroundColor Green
+    Write-Host "  Node A startup window opened!" -ForegroundColor Green
     Write-Host ""
-    Write-Host "  Wait ~15 seconds for startup, then look in that window" -ForegroundColor Yellow
-    Write-Host "  for the NODE A IS READY box â€” it shows the Ngrok address." -ForegroundColor Yellow
+    Write-Host "  Your Tailscale IP for Node B: $TS_IP" -ForegroundColor Yellow
     Write-Host ""
-    Write-Host "  Send that address to Node B so they can run:" -ForegroundColor Yellow
-    Write-Host '    .\ray_cluster.ps1 -Role B -Address "0.tcp.ap.ngrok.io:XXXXX"' -ForegroundColor White
+    Write-Host "  Tell your partner (Node B) to run:" -ForegroundColor Cyan
+    Write-Host "    .\ray_cluster.ps1 -Role B -TailscaleIP $TS_IP" -ForegroundColor White
     Write-Host ""
-    Write-Host "  After Node B connects and the monitor shows 'Alive nodes: 2'," -ForegroundColor Yellow
-    Write-Host "  wait one more 30s cycle then run in a new PowerShell:" -ForegroundColor Yellow
-    Write-Host "    cd `"$($A_PROJECT_WSL -replace '/mnt/c','C:' -replace '/','\' )`"" -ForegroundColor White
-    Write-Host "    wsl bash -c `"source $A_VENV_WSL/bin/activate && python $A_PROJECT_WSL/verify_cluster.py`"" -ForegroundColor White
-    Write-Host "  â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•" -ForegroundColor Green
+    Write-Host "  After Node B connects, verify (in a new PowerShell tab):" -ForegroundColor Cyan
+    Write-Host "    wsl bash -c `"cd '$A_PROJECT' && source venv/bin/activate && python verify_cluster.py`"" -ForegroundColor White
+    Write-Host "  ============================================================" -ForegroundColor Green
 }
 
-# â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+# ===========================================================================
 #  NODE B
-# â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+# ===========================================================================
 if ($Role -eq "B") {
 
-    # â”€â”€ Get Ngrok address â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-    if (-not $Address) {
+    # ── Get Node A's Tailscale IP ──────────────────────────────────────────
+    if (-not $TailscaleIP) {
         Write-Host ""
-        Write-Host "  Paste the Ngrok address from Node A's terminal." -ForegroundColor Yellow
-        Write-Host "  Format:  0.tcp.ap.ngrok.io:XXXXX" -ForegroundColor Gray
+        Write-Host "  Enter Node A's Tailscale IP (shown in Node A's terminal)." -ForegroundColor Yellow
+        Write-Host "  It looks like: 100.x.x.x" -ForegroundColor Gray
         Write-Host ""
-        $Address = (Read-Host "  Ngrok address").Trim()
+        $TailscaleIP = (Read-Host "  Node A Tailscale IP").Trim()
     }
 
-    if ($Address -notmatch '^\S+:\d+$') {
-        Write-Host "  ERROR: Address must be HOST:PORT (e.g. 0.tcp.ap.ngrok.io:12345)" -ForegroundColor Red
+    if ($TailscaleIP -notmatch '^100\.\d+\.\d+\.\d+$') {
+        Write-Host "  ERROR: Tailscale IPs start with 100. Got: $TailscaleIP" -ForegroundColor Red
         exit 1
     }
 
-    # â”€â”€ Find Ray binary in WSL â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    # ── Find Ray binary in WSL ─────────────────────────────────────────────
     Write-Host ""
-    Write-Host "  [NODE B] Locating Ray in WSL..." -NoNewline
+    Write-Host "  [NODE B] Finding Ray in WSL..." -NoNewline
 
-    $rayFound = wsl bash -c "
-        for p in ~/maor-equity/venv/bin/ray ~/venv/bin/ray ./venv/bin/ray /usr/local/bin/ray; do
-            [ -x `"`$p`" ] && echo `"`$p`" && exit 0
-        done
-        which ray 2>/dev/null || echo ''
-    " 2>$null
+    $rayBin = wsl bash -c @"
+for p in ~/maor-equity/venv/bin/ray ~/venv/bin/ray /usr/local/bin/ray; do
+    [ -x "`$p" ] && echo "`$p" && exit 0
+done
+which ray 2>/dev/null || true
+"@ 2>$null
+    $rayBin = ($rayBin | Where-Object { $_ -match '/ray' } | Select-Object -First 1).Trim()
 
-    $rayFound = $rayFound.Trim()
-
-    if (-not $rayFound) {
+    if (-not $rayBin) {
         Write-Host " NOT FOUND" -ForegroundColor Red
         Write-Host ""
-        Write-Host "  Ray was not found in common locations." -ForegroundColor Yellow
-        Write-Host "  Make sure you have cloned the repo and installed requirements:" -ForegroundColor Yellow
-        Write-Host "    git clone https://github.com/Shahoud867/maor-equity.git ~/maor-equity"
-        Write-Host "    cd ~/maor-equity"
-        Write-Host "    python3 -m venv venv"
-        Write-Host "    source venv/bin/activate"
-        Write-Host "    pip install ray[default] torch --index-url https://download.pytorch.org/whl/cu121"
+        Write-Host "  Ray not found. In WSL, run:" -ForegroundColor Yellow
+        Write-Host "    git clone https://github.com/Shahoud867/maor-equity ~/maor-equity" -ForegroundColor White
+        Write-Host "    cd ~/maor-equity" -ForegroundColor White
+        Write-Host "    python3 -m venv venv && source venv/bin/activate" -ForegroundColor White
+        Write-Host "    pip install ray[default]" -ForegroundColor White
         exit 1
     }
 
-    Write-Host " Found: $rayFound" -ForegroundColor Green
-    $venvBin = Split-Path $rayFound -Parent   # e.g. ~/maor-equity/venv/bin
+    Write-Host " $rayBin" -ForegroundColor Green
 
-    # â”€â”€ Write Node B bash script â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     Write-Host "  [NODE B] Writing connection script..." -ForegroundColor Cyan
 
-    $nodeBScript = @"
+    # -----------------------------------------------------------------------
+    #  NODE B BASH SCRIPT
+    # -----------------------------------------------------------------------
+    $scriptB = @"
 #!/usr/bin/env bash
-# Node B auto-connect watchdog â€” written by ray_cluster.ps1
+# Node B: Ray worker - connects to Node A via Tailscale
+# Auto-generated by ray_cluster.ps1
 
-ADDRESS="$Address"
-RAY="$rayFound"
+HEAD_IP="$TailscaleIP"
+RAY="$rayBin"
 
 export LD_PRELOAD=""
 export RAY_DISABLE_JEMALLOC=1
 export CUDA_VISIBLE_DEVICES=0
 
-NGROK_HOST=`$(echo "`$ADDRESS" | cut -d: -f1)
-NGROK_PORT=`$(echo "`$ADDRESS" | cut -d: -f2)
-
-now() { date '+%H:%M:%S'; }
-
 echo ""
-echo "  â•”â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•—"
-echo "  â•‘       NODE B  â€”  Ray Worker Connect             â•‘"
-echo "  â•šâ•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•"
-echo "  Address : `$ADDRESS"
-echo "  Ray     : `$RAY"
+echo "  ============================================================"
+echo "  NODE B -- Ray Worker (connecting to `$HEAD_IP:6379)"
+echo "  ============================================================"
 echo ""
 
-connect() {
-    echo "  [`$(now)] Stopping existing Ray..."
+# ── Check Tailscale connectivity ─────────────────────────────────────────
+echo "  [1/3] Checking connectivity to Node A (`$HEAD_IP)..."
+if ping -c2 -W3 "`$HEAD_IP" >/dev/null 2>&1; then
+    echo "  Ping OK - Tailscale tunnel is up"
+else
+    echo "  WARNING: Cannot ping `$HEAD_IP"
+    echo "  Make sure:"
+    echo "    1. Tailscale is running on BOTH PCs (system tray icon)"
+    echo "    2. Both are signed into the SAME Tailscale account"
+    echo "    3. Node A's ray_cluster.ps1 is still running"
+    read -rp "  Press Enter to try anyway, or Ctrl+C to cancel..."
+fi
+
+# ── Stop existing Ray ────────────────────────────────────────────────────
+echo ""
+echo "  [2/3] Stopping existing Ray..."
+"`$RAY" stop --force 2>/dev/null || true
+sleep 2
+
+# ── Connect to head ──────────────────────────────────────────────────────
+echo "  [3/3] Connecting to Ray head at `$HEAD_IP:6379..."
+
+connect_worker() {
     "`$RAY" stop --force 2>/dev/null || true
     sleep 2
-    echo "  [`$(now)] Connecting to head at `$ADDRESS..."
-    "`$RAY" start \\
-        --address="`$ADDRESS" \\
-        --num-gpus=1 \\
-        --num-cpus=4 \\
-        2>&1 | tail -8
-    echo "  [`$(now)] Worker started. Watching for disconnects..."
+    "`$RAY" start \
+        --address="`$HEAD_IP:6379" \
+        --num-gpus=1 \
+        --num-cpus=4 \
+        2>&1
 }
 
-trap 'echo "  Watcher stopped by user."; "`$RAY" stop 2>/dev/null; exit 0' INT TERM
+connect_worker
 
-# Initial connect
-connect
+echo ""
+echo "  ============================================================"
+echo "  CONNECTED! Watching for disconnects every 10s..."
+echo "  ============================================================"
+echo ""
 
-# Watch loop â€” NEVER calls ray.init() or ray.shutdown()
+# Watch loop - NEVER calls ray.init() or ray.shutdown()
+# Only checks: (1) is raylet process alive? (2) can we TCP to head?
 while true; do
     sleep 10
+    NOW=`$(date '+%H:%M:%S')
 
-    # Check 1: local raylet process alive?
+    # Check 1: raylet process
     if ! pgrep -f raylet >/dev/null 2>&1; then
-        echo "  [`$(now)] RAYLET DIED â€” reconnecting..."
-        connect
+        echo "  [`$NOW] RAYLET DIED - reconnecting..."
+        connect_worker
         continue
     fi
 
-    # Check 2: TCP path to Node A still open?
-    if ! nc -z -w4 "`$NGROK_HOST" "`$NGROK_PORT" 2>/dev/null; then
-        echo "  [`$(now)] NGROK UNREACHABLE â€” reconnecting..."
-        connect
+    # Check 2: TCP to Node A Tailscale IP
+    if ! nc -z -w4 "`$HEAD_IP" 6379 2>/dev/null; then
+        echo "  [`$NOW] LOST CONNECTION to `$HEAD_IP:6379 - reconnecting..."
+        connect_worker
         continue
     fi
 
-    echo "  [`$(now)] OK â€” raylet alive, tunnel reachable"
+    echo "  [`$NOW] OK - raylet alive, connected to `$HEAD_IP:6379"
 done
+
+echo ""
+read -rp "  === Script ended. Press Enter to close ==="
 "@
 
-    $nodeBScriptLf = $nodeBScript -replace "`r`n","`n"
-    [System.IO.File]::WriteAllText("$WIN_TMP\nodeB.sh", $nodeBScriptLf)
-
+    Write-UnixFile -Path "$WIN_TMP\nodeB.sh" -Content $scriptB
     wsl chmod +x "$WSL_TMP/nodeB.sh" 2>$null
 
-    Write-Host "  [NODE B] Opening WSL window..." -ForegroundColor Cyan
-    Open-WslWindow -Title "NODE B â€” Ray Worker" -WslScript "$WSL_TMP/nodeB.sh"
+    Open-WslWindow -Title "NODE B - Ray Worker" -Script "$WSL_TMP/nodeB.sh"
 
     Write-Host ""
-    Write-Host "  â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•" -ForegroundColor Green
-    Write-Host "  A new terminal window opened connecting Node B to Ray." -ForegroundColor Green
+    Write-Host "  ============================================================" -ForegroundColor Green
+    Write-Host "  Node B connection window opened!" -ForegroundColor Green
     Write-Host ""
-    Write-Host "  Watch that window â€” it will show:" -ForegroundColor Yellow
-    Write-Host "    OK â€” raylet alive, tunnel reachable    (every 10s)" -ForegroundColor Gray
-    Write-Host "    RECONNECTING...                         (on drops, auto-fixed)" -ForegroundColor Gray
+    Write-Host "  Watch that window -- it will print every 10s:" -ForegroundColor Cyan
+    Write-Host "    OK - raylet alive, connected to $TailscaleIP:6379" -ForegroundColor Gray
     Write-Host ""
-    Write-Host "  On Node A â€” after monitor shows 'Alive nodes: 2'," -ForegroundColor Yellow
-    Write-Host "  wait one 30s cycle then run verify_cluster.py." -ForegroundColor Yellow
-    Write-Host "  â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•" -ForegroundColor Green
+    Write-Host "  If it shows RECONNECTING that is normal and automatic." -ForegroundColor Gray
+    Write-Host ""
+    Write-Host "  Tell Node A to run verify_cluster.py after ~30s." -ForegroundColor Cyan
+    Write-Host "  ============================================================" -ForegroundColor Green
 }
 
 Write-Host ""
-Write-Host "  Done. Keep both terminal windows open." -ForegroundColor Cyan
+Write-Host "  Done. Keep the WSL terminal window open." -ForegroundColor Cyan
 Write-Host ""

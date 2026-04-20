@@ -85,7 +85,7 @@ Traditional equity research requires analysts to synthesise earnings call transc
 ╚══════════════════════════════════════════╝        ║  │  0.2 GPU allocation                   │    ║
                    │                                ║  └──────────┬───────────────┬────────────┘    ║
                    │                                ║             │               │                 ║
-          Ngrok TCP Tunnel                          ║  ┌──────────▼──────┐  ┌────▼────────────┐    ║
+          Tailscale VPN Tunnel                          ║  ┌──────────▼──────┐  ┌────▼────────────┐    ║
           (encrypted, port-                         ║  │ Summarization   │  │ GuardrailAgent  │    ║
            forwarded over                           ║  │ Agent           │  │ (Bull/Bear +    │    ║
            internet NAT)                            ║  │ map-reduce      │  │  Risk Arbiter)  │    ║
@@ -195,10 +195,10 @@ Ray Object Store: NumPy arrays (sentiment vectors, chunk lists, indicator dicts)
                                                           │
   Tcomm = Tencode + Tserialize + Ttransfer + Tdeserialize + Tdecode
 
-  Expected ranges (LAN / Ngrok):
+  Expected ranges (LAN / Tailscale):
     Tencode      ≈  1–3 ms    (NumPy array creation)
     Tserialize   ≈  3–8 ms    (Ray object-store put)
-    Ttransfer    ≈  4–20 ms   (cross-node Ngrok TCP)
+    Ttransfer    ≈  4–20 ms   (cross-node Tailscale VPN)
     Tdeserialize ≈  3–8 ms    (Ray object-store get on Node B)
     Tdecode      ≈  1–3 ms    (array reconstruction)
     ─────────────────────────
@@ -274,7 +274,7 @@ maor-equity/
 │   └── cluster_config.yaml         Ray cluster + model + VRAM budget config
 │
 ├── scripts/
-│   ├── start_cluster.sh            Launch Ray head + Ngrok tunnel (Node A)
+│   ├── ray_cluster.ps1 -Role A            Launch Ray head via Tailscale (Node A)
 │   ├── start_and_check_ray.sh      Ray + health check
 │   ├── verify_nodea_env.sh         Environment validation (Node A)
 │   └── final_verify_nodea.sh       Pre-demo checklist (Node A)
@@ -301,7 +301,7 @@ maor-equity/
 
 | Component | File | What it does |
 |---|---|---|
-| Ray head node | `scripts/start_cluster.sh` | Starts the cluster, exposes Ngrok tunnel |
+| Ray head node | `scripts/ray_cluster.ps1 -Role A` | Starts the cluster, connects via Tailscale VPN |
 | Ingestion Agent | `agents/ingestion_agent.py` | Downloads SEC filings, strips HTML, tokenises |
 | Technical Agent | `agents/technical_agent.py` | Computes RSI, MACD, Bollinger, VWAP from yfinance |
 | Orchestrator | `agents/orchestrator.py` | Runs the DAG, measures Tcomm, collects all results |
@@ -313,7 +313,7 @@ maor-equity/
 **Your weekly tasks:**
 
 ```
-Week 1:  Start Ray + Ngrok → share address with partner → verify_cluster.py shows 2 nodes
+Week 1:  Start Ray (Tailscale) → share address with partner → verify_cluster.py shows 2 nodes
 Week 2:  Confirm ingestion works (AAPL 8-K) → chunk_filter working → run full pipeline once
 Week 3:  Profile Tcomm decomposition → confirm b1_serial_pipeline.py runs on partner's node
 Week 4:  Run all 3 evaluation scripts → compile results → write Node A section of report
@@ -344,7 +344,7 @@ Week 1 — Setup:
   □ Verify nvidia-smi shows T1000 inside WSL
   □ Run setup_nodeB.ps1 (installs CUDA torch, all deps)
   □ Pre-download all models (FinBERT ×2 + Phi-3-mini) — takes ~10 min
-  □ Connect Ray worker to Node A's Ngrok address
+  □ Connect Ray worker to Node A's Tailscale IP
   □ Confirm verify_cluster.py on Node A shows 2 nodes + GPU
 
 Week 2 — First pipeline run:
@@ -552,7 +552,7 @@ chunk_document(text, chunk_size=512, stride=64)
 
 ## 7. Communication Protocol
 
-All inter-node data travels through Ray's distributed object store over the Ngrok TCP tunnel. The orchestrator measures every stage of communication latency using:
+All inter-node data travels through Ray's distributed object store over the Tailscale VPN tunnel. The orchestrator measures every stage of communication latency using:
 
 ```
 Tcomm = Tencode + Tserialize + Ttransfer + Tdeserialize + Tdecode
@@ -564,7 +564,7 @@ Tcomm = Tencode + Tserialize + Ttransfer + Tdeserialize + Tdecode
 |---|---|---|
 | `Tencode` | Before `ray.put()` | NumPy array creation from Python lists |
 | `Tserialize` | `ray.put()` call | Pickling + writing to Ray object store |
-| `Ttransfer` | Time until `remote()` dispatched | Network latency over Ngrok TCP |
+| `Ttransfer` | Time until `remote()` dispatched | Network latency over Tailscale VPN |
 | `Tdeserialize` | `ray.get()` on results | Reading from Ray object store on consumer |
 | `Tdecode` | After `ray.get()` | Reconstructing the Python object |
 
@@ -806,7 +806,7 @@ Pass condition: disagreement_pct > 10%
 ### Prerequisites
 - WSL2 with Ubuntu 22.04
 - Python 3.10+
-- Ngrok account (free tier works): https://ngrok.com
+- Tailscale account (free tier works): https://tailscale.com/download/windows
 
 ### Installation
 
@@ -825,10 +825,10 @@ pip install -r requirements-nodeA.txt
 
 ```bash
 source venv/bin/activate
-bash scripts/start_cluster.sh
+bash scripts/ray_cluster.ps1 -Role A
 # Opens Ray head on :6379 and Ray dashboard on :8265
-# Starts Ngrok TCP tunnel — check http://localhost:4040 for the address
-# Share the address (e.g., 0.tcp.ngrok.io:12345) with your partner
+# Starts Tailscale VPN tunnel — check http://localhost:4040 for the address
+# Share the address (e.g., 100.x.x.x:6379) with your partner
 ```
 
 ### Verify
@@ -855,7 +855,7 @@ python verify_cluster.py
 □ NVIDIA driver ≥ 525 installed on Windows (NOT inside WSL)
 □ Python 3.10 available in WSL
 □ At least 15 GB free disk space (models are large)
-□ Ngrok address from Node A partner
+□ Tailscale IP from Node A partner
 ```
 
 ### Step 1 — Verify GPU inside WSL
@@ -923,13 +923,13 @@ EOF
 
 ### Step 4 — Connect to Node A's Ray cluster
 
-Wait for your partner to share the Ngrok TCP address. It looks like `0.tcp.ngrok.io:12345`.
+Wait for your partner to share the Tailscale VPN address. It looks like `100.x.x.x:6379`.
 
 ```bash
 source venv/bin/activate
 export RAY_DISABLE_JEMALLOC=1
-ray start --address=<NGROK_ADDRESS_FROM_PARTNER>
-# Example: ray start --address=0.tcp.ngrok.io:12345
+ray start --address=<TAILSCALE_IP>:6379
+# Example: ray start --address=100.x.x.x:6379
 # Expected output: "Ray runtime started. Connected to Ray cluster."
 ```
 
@@ -1137,7 +1137,7 @@ Tcomm contribution:
 ```
 t_encode:      ~1–3 ms
 t_serialize:   ~3–8 ms
-t_transfer:    ~4–20 ms   (Ngrok adds ~5ms vs LAN)
+t_transfer:    ~4–20 ms   (Tailscale adds ~10ms vs LAN)
 t_deserialize: ~3–8 ms
 Total Tcomm:   ~11–39 ms  (<< pipeline time, shows compression is efficient)
 ```
@@ -1174,13 +1174,13 @@ Pass condition: ROUGE-L difference ≥ -1.0 → Expected: PASS (positive differe
 ### Node B can't connect to Ray
 
 ```bash
-# Check Ngrok is still running on Node A:
+# Check Tailscale is connected on Node A:
 # Node A: curl http://localhost:4040/api/tunnels
 
 # Re-run on Node B:
 ray stop
 export RAY_DISABLE_JEMALLOC=1
-ray start --address=<NEW_NGROK_ADDRESS>
+ray start --address=<TAILSCALE_IP>:6379
 ```
 
 ### CUDA not found inside WSL
@@ -1240,7 +1240,7 @@ python -c "import ray; ray.init(address='auto'); print(ray.cluster_resources())"
 # To debug: add print(txt) inside _gen_json() in guardrail_agent.py
 ```
 
-### Ngrok connection unstable on demo day
+### Tailscale connection issue on demo day
 
 Use the VirtualBox fallback (both nodes on same LAN):
 
@@ -1248,7 +1248,7 @@ Use the VirtualBox fallback (both nodes on same LAN):
 # Node A:
 ray start --head --port=6379
 
-# Node B (same network, no Ngrok):
+# Node B (same network, direct connection):
 ray start --address=<NODE_A_LOCAL_IP>:6379
 # Find Node A's local IP: ip addr show | grep inet
 ```
@@ -1263,12 +1263,12 @@ ray start --address=<NODE_A_LOCAL_IP>:6379
 ═══════════════════════════════════════════════════════════════════
 
 NODE A (do first):
-  bash scripts/start_cluster.sh
-  → Share Ngrok address with Node B partner
+  bash scripts/ray_cluster.ps1 -Role A
+  → Share Tailscale IP with Node B partner
 
 NODE B (after Node A is ready):
   source venv/bin/activate && export RAY_DISABLE_JEMALLOC=1
-  ray start --address=<NGROK_ADDRESS>
+  ray start --address=<TAILSCALE_IP>:6379
 
 VERIFY (Node A):
   python verify_cluster.py

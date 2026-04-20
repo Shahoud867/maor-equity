@@ -8,8 +8,8 @@
 #    # Install only (Node A not started yet):
 #    .\setup_nodeB.ps1
 #
-#    # Install + connect Ray worker:
-#    .\setup_nodeB.ps1 -NgrokHost "0.tcp.ngrok.io" -NgrokPort 12345
+#    # Install + connect Ray worker (after Tailscale setup):
+#    .\ray_cluster.ps1 -Role B -TailscaleIP 100.x.x.x
 #
 #  PREREQUISITES:
 #    - Windows 10/11 with WSL2 + Ubuntu 22.04
@@ -18,8 +18,6 @@
 # =============================================================================
 
 param(
-    [string]$NgrokHost        = "",
-    [int]   $NgrokPort        = 0,
     [switch]$SkipSystemUpdate,
     [switch]$SkipModelDownload,
     [switch]$VirtualBoxFallback
@@ -133,27 +131,17 @@ print('All models downloaded.')
 
 # ── Connect Ray worker ────────────────────────────────────────────────────────
 Write-Banner "RAY WORKER CONNECTION"
-if($NgrokHost -ne "" -and $NgrokPort -ne 0){
-    if($VirtualBoxFallback){
-        Invoke-WSL "cd '$WSL_ROOT' && source venv/bin/activate && export LD_PRELOAD='' && RAY_DISABLE_JEMALLOC=1 ray start --address=${VBOX_HEAD}:6379" "Connecting Ray worker (VirtualBox)"
-    }else{
-        Invoke-WSL "cd '$WSL_ROOT' && source venv/bin/activate && export LD_PRELOAD='' && RAY_DISABLE_JEMALLOC=1 ray start --address=${NgrokHost}:${NgrokPort}" "Connecting Ray worker via Ngrok"
-    }
-    Write-OK "Ray worker connected. Ask partner to run: python verify_cluster.py"
-    Write-Host "  For resilient reconnects on Node B, prefer running:" -ForegroundColor White
-    Write-Host "  cd '$WSL_ROOT'" -ForegroundColor Gray
-    Write-Host "  source venv/bin/activate" -ForegroundColor Gray
-    Write-Host "  export LD_PRELOAD=''" -ForegroundColor Gray
-    Write-Host "  export RAY_DISABLE_JEMALLOC=1" -ForegroundColor Gray
-    Write-Host "  bash scripts/nodeb_connect_watch.sh --address=${NgrokHost}:${NgrokPort}" -ForegroundColor Gray
-}else{
-    Write-Warn "NgrokHost/NgrokPort not supplied — Ray worker NOT connected yet."
-    Write-Host "  Once Node A is running, execute in WSL:" -ForegroundColor White
-    Write-Host "  cd '$WSL_ROOT'" -ForegroundColor Gray
-    Write-Host "  source venv/bin/activate" -ForegroundColor Gray
-    Write-Host "  export LD_PRELOAD=''" -ForegroundColor Gray
-    Write-Host "  RAY_DISABLE_JEMALLOC=1 ray start --address=<ngrok_host>:<ngrok_port>" -ForegroundColor Gray
-}
+Write-Host "  Cluster connection is handled by ray_cluster.ps1 (Tailscale VPN)." -ForegroundColor White
+Write-Host ""
+Write-Host "  Step 1 — Install Tailscale on BOTH machines:" -ForegroundColor Cyan
+Write-Host "           https://tailscale.com/download/windows" -ForegroundColor Gray
+Write-Host "           Sign in with the SAME Tailscale account on both nodes." -ForegroundColor Gray
+Write-Host ""
+Write-Host "  Step 2 — Node A starts the cluster:" -ForegroundColor Cyan
+Write-Host "           .\ray_cluster.ps1 -Role A" -ForegroundColor Gray
+Write-Host ""
+Write-Host "  Step 3 — Node B (this machine) joins once Node A is ready:" -ForegroundColor Cyan
+Write-Host "           .\ray_cluster.ps1 -Role B -TailscaleIP <Node-A-100.x.x.x>" -ForegroundColor Gray
 
 Write-Banner "NODE B SETUP COMPLETE" "Green"
 Write-Host "  Repo dir (WSL)  : $WSL_ROOT" -ForegroundColor Cyan

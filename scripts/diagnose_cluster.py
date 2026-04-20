@@ -57,7 +57,7 @@ elif not has_gpu:
     print("    export LD_PRELOAD=''")
     print("    export RAY_DISABLE_JEMALLOC=1")
     print("    export CUDA_VISIBLE_DEVICES=0")
-    print("    ray start --address=<NGROK_ADDRESS> --num-gpus=1 --num-cpus=4")
+    print("    ray start --address=<TAILSCALE_IP>:6379 --num-gpus=1 --num-cpus=4")
 else:
     print("OK: 2 nodes alive, GPU registered.")
     print(f"  GPU count: {cr.get('GPU', 0)}")

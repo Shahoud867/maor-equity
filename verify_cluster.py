@@ -15,7 +15,7 @@ import sys
 import time
 
 STATE_FILE = "/tmp/ray_cluster_state.json"
-MAX_AGE_S  = 90   # accept state files up to 90s old (monitor writes every 30s)
+MAX_AGE_S  = 120  # accept state files up to 120s old (monitor writes every 30s)
 
 
 def _load_state() -> dict:
@@ -76,7 +76,7 @@ if len(alive) < 2:
     print("  export LD_PRELOAD=''")
     print("  export RAY_DISABLE_JEMALLOC=1")
     print("  export CUDA_VISIBLE_DEVICES=0")
-    print("  ray start --address=<NGROK_ADDRESS> --num-gpus=1 --num-cpus=4")
+    print("  ray start --address=<TAILSCALE_IP>:6379 --num-gpus=1 --num-cpus=4")
     sys.exit(1)
 
 print("Both nodes alive!")
