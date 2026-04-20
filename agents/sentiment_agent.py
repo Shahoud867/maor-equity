@@ -7,39 +7,62 @@ import ray
 import numpy as np
 
 
-@ray.remote(num_gpus=0.25)          # 3 actors share GPU  →  0.75 GPU total
-class FinBERTActor:
-    """One FinBERT classifier for one sentiment dimension."""
+@ray.remote(num_gpus=0.35)
+class FinBERTBundle:
+    """
+    Single actor holding all 3 FinBERT classifiers.
 
-    def __init__(self, checkpoint: str, dimension: str, min_confidence: float = 0.60):
-        from transformers import (AutoTokenizer, AutoModelForSequenceClassification,
-                                   BitsAndBytesConfig, pipeline)
-        self.dimension = dimension
-        self.min_conf  = min_confidence
-        # 8-bit quantization: ~150 MB/model vs ~440 MB FP32.
-        # device_map={"": 0} explicitly places on GPU 0 without module splitting
-        # (BERT doesn't support device_map="auto" — no _no_split_modules attr).
-        bnb = BitsAndBytesConfig(load_in_8bit=True)
-        tok = AutoTokenizer.from_pretrained(checkpoint)
-        mdl = AutoModelForSequenceClassification.from_pretrained(
-            checkpoint, quantization_config=bnb, device_map={"": 0}
+    Why bundled instead of 3 separate actors:
+    - Saves 2 CUDA contexts (~200 MB overhead on T1000)
+    - ProsusAI/finbert loaded ONCE, shared between market + temporal
+      (same checkpoint → ~220 MB saved vs loading it twice)
+    - T1000 runs GPU ops sequentially anyway; 3 actors just added
+      process-spawn overhead with no real parallelism gain
+    """
+
+    def __init__(self, min_confidence: float = 0.60):
+        import torch
+        from transformers import pipeline
+        self._min_conf = min_confidence
+
+        # ProsusAI/finbert covers market sentiment AND temporal framing
+        self._pipe_mkt = pipeline(
+            "text-classification", model="ProsusAI/finbert",
+            device=0, top_k=None, torch_dtype=torch.float16,
         )
-        self.pipe = pipeline("text-classification", model=mdl, tokenizer=tok,
-                             top_k=None)
-        print(f"[FinBERTActor:{dimension}] loaded {checkpoint} (8-bit)")
+        # finbert-tone covers regulatory/compliance tone
+        self._pipe_reg = pipeline(
+            "text-classification", model="yiyanghkust/finbert-tone",
+            device=0, top_k=None, torch_dtype=torch.float16,
+        )
+        # Temporal dimension reuses the same pipeline object — no extra VRAM
+        self._pipe_tmp = self._pipe_mkt
+        print("[FinBERTBundle] 2 checkpoints loaded for 3 dimensions (market+temporal shared)")
 
-    def classify_batch(self, texts: list) -> dict:
+    def classify_all(self, market_texts: list, reg_texts: list,
+                     tmp_texts: list) -> tuple:
+        """Return (market_result, regulatory_result, temporal_result)."""
+        return (
+            self._run("market",     self._pipe_mkt, market_texts),
+            self._run("regulatory", self._pipe_reg, reg_texts),
+            self._run("temporal",   self._pipe_tmp, tmp_texts),
+        )
+
+    def ping(self) -> bool:
+        return True
+
+    def _run(self, dimension: str, pipe, texts: list) -> dict:
         if not texts:
-            return {"dimension": self.dimension, "scores": [], "n_ambiguous": 0}
-        raw = self.pipe(texts, batch_size=8, truncation=True, max_length=512)
+            return {"dimension": dimension, "scores": [], "n_ambiguous": 0}
+        raw = pipe(texts, batch_size=8, truncation=True, max_length=512)
         processed, n_amb = [], 0
         for item in raw:
             sd = {s["label"].lower(): s["score"] for s in item}
-            if max(sd.values()) < self.min_conf:
+            if max(sd.values()) < self._min_conf:
                 n_amb += 1
                 sd["ambiguous"] = True
             processed.append(sd)
-        return {"dimension": self.dimension, "scores": processed,
+        return {"dimension": dimension, "scores": processed,
                 "n_texts": len(texts), "n_ambiguous": n_amb}
 
 

@@ -154,39 +154,24 @@ if __name__ == "__main__":
 
     # ── Stage 3: Load 3× FinBERT ─────────────────────────────────────────
     stage_header(3, "Loading 3x FinBERT actors onto Node B GPU")
-    print("  (Each actor: ProsusAI/finbert or finbert-tone, ~150 MB each in INT8)")
+    print("  (1 actor, 2 checkpoints: ProsusAI/finbert FP16 + finbert-tone FP16, ~440 MB total)")
 
-    from agents.sentiment_agent import FinBERTActor
+    from agents.sentiment_agent import FinBERTBundle
 
-    models = [
-        ("ProsusAI/finbert",         "market"),
-        ("yiyanghkust/finbert-tone", "regulatory"),
-        ("ProsusAI/finbert",         "temporal"),
-    ]
-    actors = []
-    for idx, (ckpt, dim) in enumerate(models, 1):
-        with TimedSpinner(f"  [{idx}/3] FinBERTActor:{dim}  ({ckpt})"):
-            actor = FinBERTActor.remote(ckpt, dim)
-            ray.get(actor.classify_batch.remote(["Loading test."]))
-        actors.append(actor)
-        used = get_vram_used_mb()
-        print(f"    VRAM after actor {idx}: {vram_bar(used, total_mb)}")
-
-    sent_mkt, sent_reg, sent_tmp = actors
-
-    # Warm-up batch
-    with TimedSpinner("  Warming up all 3 FinBERT actors"):
-        ray.get([
-            sent_mkt.classify_batch.remote(["Revenue grew 5%."] * 4),
-            sent_reg.classify_batch.remote(["SEC investigation opened."] * 4),
-            sent_tmp.classify_batch.remote(["Guidance raised for next quarter."] * 4),
-        ])
+    with TimedSpinner("  Loading FinBERTBundle (2 checkpoints, 3 dimensions)"):
+        finbert = FinBERTBundle.remote()
+        # Warm-up: runs all 3 classifiers to confirm GPU inference works
+        ray.get(finbert.classify_all.remote(
+            ["Revenue grew 5%."],
+            ["SEC investigation opened."],
+            ["Guidance raised for next quarter."],
+        ))
 
     time.sleep(1)
     after_finbert_mb = get_vram_used_mb()
     delta_finbert    = after_finbert_mb - baseline_mb
-    print(f"\n  After 3x FinBERT: {vram_bar(after_finbert_mb, total_mb)}")
-    print(f"  Delta            : +{delta_finbert:.0f} MB  (expected ~450 MB in INT8)")
+    print(f"\n  After FinBERTBundle: {vram_bar(after_finbert_mb, total_mb)}")
+    print(f"  Delta             : +{delta_finbert:.0f} MB  (expected ~440 MB)")
 
     # ── Stage 4: Load shared Phi-3-mini ──────────────────────────────────
     stage_header(4, "Loading shared Phi-3-mini-4k-instruct (Node B GPU)")
@@ -232,7 +217,7 @@ if __name__ == "__main__":
     print()
     print("  Component                  VRAM (measured)")
     print("  ─────────────────────────  ───────────────")
-    print(f"  3x FinBERT actors        : +{delta_finbert:.0f} MB")
+    print(f"  FinBERTBundle (3 dims)   : +{delta_finbert:.0f} MB")
     print(f"  Phi-3-mini (shared, 4bit): +{delta_phi3:.0f} MB")
     print(f"  Ray + buffers            : +{peak_mb - after_phi3_mb:.0f} MB")
     print(f"  ─────────────────────────  ───────────────")

@@ -8,7 +8,7 @@ import ray
 import numpy as np
 
 from agents.ingestion_agent      import IngestionAgent
-from agents.sentiment_agent      import FinBERTActor, DimensionRouter, aggregate_sentiment_vector
+from agents.sentiment_agent      import FinBERTBundle, DimensionRouter, aggregate_sentiment_vector
 from agents.summarization_agent  import SummarizationAgent
 from agents.technical_agent      import TechnicalAnalysisAgent
 from agents.guardrail_agent      import GuardrailAgent, Phi3ModelActor
@@ -26,9 +26,7 @@ def run_pipeline(ticker: str, filing_type: str = "8-K") -> dict:
     # Initialise remote actors (Node placement handled by Ray scheduler)
     ingestion   = IngestionAgent.remote()
     tech        = TechnicalAnalysisAgent.remote()
-    sent_mkt    = FinBERTActor.remote("ProsusAI/finbert",          "market")
-    sent_reg    = FinBERTActor.remote("yiyanghkust/finbert-tone",  "regulatory")
-    sent_tmp    = FinBERTActor.remote("ProsusAI/finbert",          "temporal")
+    finbert     = FinBERTBundle.remote()        # single actor, 3 dimensions
     summarizer  = SummarizationAgent.remote(phi3)
     guardrail   = GuardrailAgent.remote(phi3)
     router      = DimensionRouter()
@@ -73,13 +71,14 @@ def run_pipeline(ticker: str, filing_type: str = "8-K") -> dict:
     timings["t_serialize_ms"] = (time.perf_counter() - t_serialize) * 1000
 
     t_transfer = time.perf_counter()
-    r_mkt  = sent_mkt.classify_batch.remote(ref_mkt_payload)
-    r_reg  = sent_reg.classify_batch.remote(ref_reg_payload)
-    r_tmp  = sent_tmp.classify_batch.remote(ref_tmp_payload)
-    r_sum  = summarizer.process_document.remote(chunks, f"{ticker}_{filing_type}")
-    r_tech = tech.compute_indicators.remote(ticker)
+    # FinBERT bundle runs all 3 dimensions in one call (Node B);
+    # Summarizer and tech run concurrently on Node B and Node A respectively.
+    r_bundle = finbert.classify_all.remote(ref_mkt_payload, ref_reg_payload,
+                                           ref_tmp_payload)
+    r_sum    = summarizer.process_document.remote(chunks, f"{ticker}_{filing_type}")
+    r_tech   = tech.compute_indicators.remote(ticker)
 
-    mkt_r, reg_r, tmp_r = ray.get([r_mkt, r_reg, r_tmp])
+    mkt_r, reg_r, tmp_r = ray.get(r_bundle)   # unpack 3-tuple
     timings["t_transfer_ms"] = (time.perf_counter() - t_transfer) * 1000
 
     t_deserialize = time.perf_counter()
