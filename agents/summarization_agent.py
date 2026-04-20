@@ -10,9 +10,11 @@ import torch
 class SummarizationAgent:
 
     def __init__(self, phi3_actor):
-        # Receive handle to the shared model actor — no separate model load
         self.phi3 = phi3_actor
         print("[SummarizationAgent] ready (using shared Phi3ModelActor)")
+
+    def ping(self) -> bool:
+        return True
 
     # ------------------------------------------------------------------
     def _gen(self, prompt: str, max_new: int = 300) -> str:

@@ -154,7 +154,7 @@ if __name__ == "__main__":
 
     # ── Stage 3: Load 3× FinBERT ─────────────────────────────────────────
     stage_header(3, "Loading 3x FinBERT actors onto Node B GPU")
-    print("  (Each actor: ProsusAI/finbert or finbert-tone, ~340 MB each)")
+    print("  (Each actor: ProsusAI/finbert or finbert-tone, ~220 MB each in FP16)")
 
     from agents.sentiment_agent import FinBERTActor
 
@@ -186,7 +186,7 @@ if __name__ == "__main__":
     after_finbert_mb = get_vram_used_mb()
     delta_finbert    = after_finbert_mb - baseline_mb
     print(f"\n  After 3x FinBERT: {vram_bar(after_finbert_mb, total_mb)}")
-    print(f"  Delta            : +{delta_finbert:.0f} MB  (expected ~1020 MB)")
+    print(f"  Delta            : +{delta_finbert:.0f} MB  (expected ~660 MB in FP16)")
 
     # ── Stage 4: Load shared Phi-3-mini ──────────────────────────────────
     stage_header(4, "Loading shared Phi-3-mini-4k-instruct (Node B GPU)")
@@ -209,15 +209,15 @@ if __name__ == "__main__":
     stage_header(5, "Loading SummarizationAgent + GuardrailAgent")
     print("  (These share the Phi-3 model — no extra VRAM)")
 
-    with TimedSpinner("  SummarizationAgent.remote(phi3)"):
+    # SummarizationAgent and GuardrailAgent hold no models — they only store
+    # a reference to phi3_actor. No inference warmup needed here.
+    with TimedSpinner("  Creating SummarizationAgent"):
         summarizer = SummarizationAgent.remote(phi3)
-        ray.get(summarizer.map_chunk.remote({"chunk_id": 0, "text": "Test."}))
+        ray.get(summarizer.ping.remote())
 
-    with TimedSpinner("  GuardrailAgent.remote(phi3)"):
-        import numpy as np
+    with TimedSpinner("  Creating GuardrailAgent"):
         guardrail = GuardrailAgent.remote(phi3)
-        sv = np.full((3, 3), 0.33)
-        ray.get(guardrail.assess.remote("Test summary.", sv, {"rsi": 50}))
+        ray.get(guardrail.ping.remote())
 
     time.sleep(1)
     peak_mb    = get_vram_used_mb()

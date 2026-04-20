@@ -15,9 +15,11 @@ class FinBERTActor:
         from transformers import pipeline
         self.dimension = dimension
         self.min_conf  = min_confidence
+        import torch
         self.pipe = pipeline(
             "text-classification", model=checkpoint,
             device=0, top_k=None,
+            torch_dtype=torch.float16,   # FP16: 220 MB/model vs 440 MB FP32
         )
         print(f"[FinBERTActor:{dimension}] loaded {checkpoint}")
 

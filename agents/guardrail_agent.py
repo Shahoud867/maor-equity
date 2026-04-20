@@ -45,8 +45,10 @@ class Phi3ModelActor:
 class GuardrailAgent:
 
     def __init__(self, phi3_actor):
-        # Receive handle to the shared model actor — no separate model load
         self.phi3 = phi3_actor
+
+    def ping(self) -> bool:
+        return True
 
     def _gen_json(self, prompt: str) -> dict:
         txt = ray.get(self.phi3.generate.remote(prompt, 200))
