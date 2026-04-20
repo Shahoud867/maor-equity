@@ -17,11 +17,17 @@ class Phi3ModelActor:
 
     def __init__(self):
         from transformers import AutoModelForCausalLM, AutoTokenizer
-        self.tok = AutoTokenizer.from_pretrained("microsoft/Phi-3-mini-4k-instruct")
+        self.tok = AutoTokenizer.from_pretrained(
+            "microsoft/Phi-3-mini-4k-instruct",
+            trust_remote_code=True,
+        )
         from transformers import BitsAndBytesConfig
         bnb = BitsAndBytesConfig(load_in_4bit=True)
         self.mdl = AutoModelForCausalLM.from_pretrained(
-            "microsoft/Phi-3-mini-4k-instruct", quantization_config=bnb, device_map="auto"
+            "microsoft/Phi-3-mini-4k-instruct",
+            quantization_config=bnb,
+            device_map="auto",
+            trust_remote_code=True,
         )
         print("[Phi3ModelActor] Phi-3-mini loaded once — shared by summarizer + guardrail")
 

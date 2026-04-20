@@ -8,7 +8,7 @@ ray[default]==2.54.1
 # Transformers + quantization
 transformers==4.40.0
 bitsandbytes==0.43.0
-accelerate>=0.25.0
+accelerate==0.30.1
 sentencepiece>=0.1.99
 
 # Evaluation
