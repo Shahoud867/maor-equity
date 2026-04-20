@@ -154,23 +154,38 @@ function Open-WslWindow {
     }
 }
 
+# Ray uses these fixed ports so we can set up portproxy for all of them
+$RAY_PORTS = @(6379, 6380, 6381, 10001) + (6382..6395)
+
 # ---------------------------------------------------------------------------
-#  HELPER: add Ray firewall rules (elevates via UAC if needed)
+#  HELPER: firewall + portproxy  (script is already admin via self-elevation)
 # ---------------------------------------------------------------------------
-function Add-RayFirewallRules {
+function Add-RayNetworkRules {
+    param([string]$TsIP)
+
     Write-Host "  [FIREWALL] Adding Ray inbound rules..." -ForegroundColor Cyan
-    netsh advfirewall firewall delete rule name="Ray-GCS-6379"     >$null 2>&1
-    netsh advfirewall firewall delete rule name="Ray-Client-10001"  >$null 2>&1
-    netsh advfirewall firewall delete rule name="Ray-Workers-20000" >$null 2>&1
-    netsh advfirewall firewall add rule name="Ray-GCS-6379"     dir=in action=allow protocol=TCP localport=6379        profile=any | Out-Null
-    netsh advfirewall firewall add rule name="Ray-Client-10001"  dir=in action=allow protocol=TCP localport=10001       profile=any | Out-Null
-    netsh advfirewall firewall add rule name="Ray-Workers-20000" dir=in action=allow protocol=TCP localport=20000-29999 profile=any | Out-Null
+    netsh advfirewall firewall delete rule name="Ray-All-Ports" >$null 2>&1
+    netsh advfirewall firewall add rule name="Ray-All-Ports" dir=in action=allow protocol=TCP `
+        localport="6379,6380,6381,6382-6395,10001" profile=any | Out-Null
+    Write-Host "  Firewall rules added." -ForegroundColor Green
+
+    Write-Host "  [PORTPROXY] Bridging Tailscale IP -> WSL2 localhost for Ray ports..." -ForegroundColor Cyan
+    foreach ($p in $RAY_PORTS) {
+        netsh interface portproxy delete v4tov4 listenaddress=$TsIP listenport=$p >$null 2>&1
+        netsh interface portproxy add    v4tov4 listenaddress=$TsIP listenport=$p connectaddress=127.0.0.1 connectport=$p | Out-Null
+    }
+    Write-Host "  Portproxy rules added ($($RAY_PORTS.Count) ports)." -ForegroundColor Green
+
+    # Enable IP Helper service (required for portproxy)
+    Set-Service -Name iphlpsvc -StartupType Automatic -ErrorAction SilentlyContinue
+    Start-Service -Name iphlpsvc -ErrorAction SilentlyContinue
+
     # Verify
-    $check = netsh advfirewall firewall show rule name="Ray-GCS-6379" 2>&1
-    if ($check -match "Rule Name") {
-        Write-Host "  Firewall rules verified OK." -ForegroundColor Green
+    $check = netsh interface portproxy show v4tov4 2>&1
+    if ($check -match $TsIP) {
+        Write-Host "  Portproxy verified OK." -ForegroundColor Green
     } else {
-        Write-Host "  WARNING: Firewall rule not confirmed. Connection may still work." -ForegroundColor Yellow
+        Write-Host "  WARNING: Portproxy not confirmed - check IP Helper service." -ForegroundColor Yellow
     }
 }
 
@@ -178,8 +193,6 @@ function Add-RayFirewallRules {
 #  NODE A
 # ===========================================================================
 if ($Role -eq "A") {
-
-    Add-RayFirewallRules
 
     Write-Host ""
     Write-Host "  [NODE A] Getting Tailscale IP from Windows..." -ForegroundColor Cyan
@@ -199,6 +212,9 @@ if ($Role -eq "A") {
     }
 
     Write-Host "  Node A Tailscale IP: $TS_IP" -ForegroundColor Green
+
+    Add-RayNetworkRules -TsIP $TS_IP
+
     Write-Host ""
     Write-Host "  [NODE A] Writing startup script to $WIN_TMP\nodeA.sh..." -ForegroundColor Cyan
 
@@ -278,6 +294,10 @@ echo "  [3/4] Starting Ray head on $TS_IP:6379..."
     --head \
     --port=6379 \
     --node-ip-address="$TS_IP" \
+    --node-manager-port=6380 \
+    --object-manager-port=6381 \
+    --min-worker-port=6382 \
+    --max-worker-port=6395 \
     --disable-usage-stats \
     --include-dashboard=false \
     --num-cpus=2 \
@@ -432,7 +452,7 @@ if ($Role -eq "B") {
         Write-Host "  Already configured." -ForegroundColor Green
     }
 
-    Add-RayFirewallRules
+    Add-RayNetworkRules -TsIP $TailscaleIP
 
     # ── Find Ray binary in WSL ─────────────────────────────────────────────
     Write-Host ""
