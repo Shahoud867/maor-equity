@@ -234,22 +234,37 @@ echo "  Tailscale IP: $TS_IP"
 
 # ── Kill everything ─────────────────────────────────────────────────────
 echo ""
-echo "  [2/4] Stopping existing Ray..."
+echo "  [2/4] Stopping existing Ray (aggressive cleanup)..."
 "$RAY" stop --force 2>/dev/null || true
 sleep 1
-pkill -9 -f gcs_server   2>/dev/null || true
-pkill -9 -f raylet        2>/dev/null || true
-pkill -9 -f plasma_store  2>/dev/null || true
+pkill -9 -f gcs_server    2>/dev/null || true
+pkill -9 -f raylet         2>/dev/null || true
+pkill -9 -f plasma_store   2>/dev/null || true
+pkill -9 -f monitor.py     2>/dev/null || true
+pkill -9 -f "ray::"        2>/dev/null || true
+sleep 2
+# Force-free port 6379 if still held
+fuser -k 6379/tcp 2>/dev/null || true
 sleep 2
 rm -rf /tmp/ray /tmp/ray_* /tmp/plasma_store_socket* /tmp/session_* \
        /tmp/ray_cluster_state.json 2>/dev/null || true
 sleep 1
 
+# Verify port is free
+for i in 1 2 3; do
+    if ! ss -tlnp 2>/dev/null | grep -q ':6379'; then
+        echo "  Port 6379 free."
+        break
+    fi
+    echo "  Waiting for port 6379 to free up (attempt $i)..."
+    fuser -k 6379/tcp 2>/dev/null || true
+    sleep 3
+done
 if ss -tlnp 2>/dev/null | grep -q ':6379'; then
-    echo "  ERROR: port 6379 still occupied. Run: sudo fuser -k 6379/tcp"
+    echo "  ERROR: port 6379 still occupied after cleanup."
+    echo "  Run in WSL: sudo fuser -k 6379/tcp && sudo pkill -9 gcs_server"
     read -rp "  Press Enter to exit..." && exit 1
 fi
-echo "  Port 6379 free."
 
 # ── Start Ray head ──────────────────────────────────────────────────────
 echo ""
