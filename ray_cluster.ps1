@@ -154,38 +154,37 @@ function Open-WslWindow {
     }
 }
 
-# Ray uses these fixed ports so we can set up portproxy for all of them
-$RAY_PORTS = @(6379, 6380, 6381, 10001) + (6382..6395)
-
 # ---------------------------------------------------------------------------
 #  HELPER: firewall + portproxy  (script is already admin via self-elevation)
+#  Only proxies port 6379 (GCS) - dynamic Ray ports bind AFTER proxy is set
 # ---------------------------------------------------------------------------
 function Add-RayNetworkRules {
     param([string]$TsIP)
 
+    # Firewall: allow all Ray ports inbound
     Write-Host "  [FIREWALL] Adding Ray inbound rules..." -ForegroundColor Cyan
     netsh advfirewall firewall delete rule name="Ray-All-Ports" >$null 2>&1
     netsh advfirewall firewall add rule name="Ray-All-Ports" dir=in action=allow protocol=TCP `
-        localport="6379,6380,6381,6382-6395,10001" profile=any | Out-Null
+        localport="6379,10001,20000-29999" profile=any | Out-Null
     Write-Host "  Firewall rules added." -ForegroundColor Green
 
-    Write-Host "  [PORTPROXY] Bridging Tailscale IP -> WSL2 localhost for Ray ports..." -ForegroundColor Cyan
-    foreach ($p in $RAY_PORTS) {
-        netsh interface portproxy delete v4tov4 listenaddress=$TsIP listenport=$p >$null 2>&1
-        netsh interface portproxy add    v4tov4 listenaddress=$TsIP listenport=$p connectaddress=127.0.0.1 connectport=$p | Out-Null
-    }
-    Write-Host "  Portproxy rules added ($($RAY_PORTS.Count) ports)." -ForegroundColor Green
+    # Portproxy: only GCS port 6379 — Ray's other ports are dynamic and
+    # bind inside WSL2 AFTER this runs, so we proxy them post-start (see nodeA.sh)
+    Write-Host "  [PORTPROXY] Bridging $TsIP`:6379 -> 127.0.0.1:6379 ..." -ForegroundColor Cyan
+    netsh interface portproxy delete v4tov4 listenaddress=$TsIP listenport=6379 >$null 2>&1
+    netsh interface portproxy add    v4tov4 listenaddress=$TsIP listenport=6379 connectaddress=127.0.0.1 connectport=6379 | Out-Null
+    netsh interface portproxy delete v4tov4 listenaddress=$TsIP listenport=10001 >$null 2>&1
+    netsh interface portproxy add    v4tov4 listenaddress=$TsIP listenport=10001 connectaddress=127.0.0.1 connectport=10001 | Out-Null
 
     # Enable IP Helper service (required for portproxy)
     Set-Service -Name iphlpsvc -StartupType Automatic -ErrorAction SilentlyContinue
     Start-Service -Name iphlpsvc -ErrorAction SilentlyContinue
 
-    # Verify
     $check = netsh interface portproxy show v4tov4 2>&1
-    if ($check -match $TsIP) {
-        Write-Host "  Portproxy verified OK." -ForegroundColor Green
+    if ($check -match "6379") {
+        Write-Host "  Portproxy for GCS verified OK." -ForegroundColor Green
     } else {
-        Write-Host "  WARNING: Portproxy not confirmed - check IP Helper service." -ForegroundColor Yellow
+        Write-Host "  WARNING: Portproxy not confirmed." -ForegroundColor Yellow
     }
 }
 
@@ -294,10 +293,6 @@ echo "  [3/4] Starting Ray head on $TS_IP:6379..."
     --head \
     --port=6379 \
     --node-ip-address="$TS_IP" \
-    --node-manager-port=6380 \
-    --object-manager-port=6381 \
-    --min-worker-port=6382 \
-    --max-worker-port=6395 \
     --disable-usage-stats \
     --include-dashboard=false \
     --num-cpus=2 \
@@ -323,6 +318,24 @@ fi
 RAYLET_COUNT=$(ps aux 2>/dev/null | grep '[r]aylet' | grep -v defunct | wc -l)
 echo "  Ray GCS: UP on $TS_IP:6379"
 echo "  Raylet processes: $RAYLET_COUNT"
+
+# ── Add portproxy for dynamic raylet port ───────────────────────────────
+echo ""
+echo "  [3b/4] Adding portproxy for dynamic Ray ports..."
+RAYLET_PORT=$(ps aux 2>/dev/null | grep '[r]aylet' | grep -oP '\-\-node_manager_port=\K[0-9]+' | head -1)
+OBJ_PORT=$(ps aux 2>/dev/null | grep '[r]aylet' | grep -oP '\-\-object_manager_port=\K[0-9]+' | head -1)
+if [ -n "$RAYLET_PORT" ]; then
+    powershell.exe -NoProfile -Command "
+        netsh interface portproxy delete v4tov4 listenaddress=$TS_IP listenport=$RAYLET_PORT >nul 2>&1
+        netsh interface portproxy add    v4tov4 listenaddress=$TS_IP listenport=$RAYLET_PORT connectaddress=127.0.0.1 connectport=$RAYLET_PORT
+        if ('$OBJ_PORT') {
+            netsh interface portproxy delete v4tov4 listenaddress=$TS_IP listenport=$OBJ_PORT >nul 2>&1
+            netsh interface portproxy add    v4tov4 listenaddress=$TS_IP listenport=$OBJ_PORT connectaddress=127.0.0.1 connectport=$OBJ_PORT
+        }
+    " 2>/dev/null && echo "  Portproxy added: raylet=$RAYLET_PORT obj=$OBJ_PORT" || echo "  (portproxy skipped - run as admin if needed)"
+else
+    echo "  Could not detect raylet port - skipping dynamic portproxy"
+fi
 
 # ── Print connection info ────────────────────────────────────────────────
 echo ""
