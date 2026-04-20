@@ -22,6 +22,18 @@ Set-StrictMode -Off
 $ErrorActionPreference = "Stop"
 
 # ---------------------------------------------------------------------------
+#  SELF-ELEVATE: firewall rules require admin — re-launch as admin if needed
+# ---------------------------------------------------------------------------
+$isAdmin = ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]"Administrator")
+if (-not $isAdmin) {
+    $args = @("-NoProfile", "-ExecutionPolicy", "Bypass", "-File", "`"$PSCommandPath`"")
+    if ($Role)        { $args += "-Role";        $args += $Role }
+    if ($TailscaleIP) { $args += "-TailscaleIP"; $args += $TailscaleIP }
+    Start-Process powershell -Verb RunAs -ArgumentList $args
+    exit
+}
+
+# ---------------------------------------------------------------------------
 #  CONFIG
 # ---------------------------------------------------------------------------
 $A_VENV    = "/mnt/c/Users/shaho/OneDrive - FAST National University/Attachments/@Fast/Semester 6/PDC + NLP/maor-equity/venv"
@@ -146,27 +158,19 @@ function Open-WslWindow {
 #  HELPER: add Ray firewall rules (elevates via UAC if needed)
 # ---------------------------------------------------------------------------
 function Add-RayFirewallRules {
-    Write-Host "  [FIREWALL] Adding Ray inbound rules (may show UAC prompt)..." -ForegroundColor Cyan
-    $cmds = @(
-        "netsh advfirewall firewall delete rule name='Ray-GCS-6379' >nul 2>&1",
-        "netsh advfirewall firewall delete rule name='Ray-Client-10001' >nul 2>&1",
-        "netsh advfirewall firewall delete rule name='Ray-Workers-20000' >nul 2>&1",
-        "netsh advfirewall firewall add rule name='Ray-GCS-6379'     dir=in action=allow protocol=TCP localport=6379",
-        "netsh advfirewall firewall add rule name='Ray-Client-10001' dir=in action=allow protocol=TCP localport=10001",
-        "netsh advfirewall firewall add rule name='Ray-Workers-20000' dir=in action=allow protocol=TCP localport=20000-29999"
-    )
-    $script = $cmds -join " & "
-    try {
-        $p = Start-Process cmd -ArgumentList "/c $script" -Verb RunAs -Wait -PassThru -ErrorAction Stop
-        if ($p.ExitCode -eq 0) {
-            Write-Host "  Firewall rules added successfully." -ForegroundColor Green
-        } else {
-            Write-Host "  WARNING: Firewall rule exit code $($p.ExitCode) - continuing anyway." -ForegroundColor Yellow
-        }
-    } catch {
-        Write-Host "  WARNING: Could not add firewall rules (UAC denied?)." -ForegroundColor Yellow
-        Write-Host "  Run this manually in Admin PowerShell if connection fails:" -ForegroundColor Yellow
-        Write-Host "    netsh advfirewall firewall add rule name='Ray-GCS-6379' dir=in action=allow protocol=TCP localport=6379" -ForegroundColor Gray
+    Write-Host "  [FIREWALL] Adding Ray inbound rules..." -ForegroundColor Cyan
+    netsh advfirewall firewall delete rule name="Ray-GCS-6379"     >$null 2>&1
+    netsh advfirewall firewall delete rule name="Ray-Client-10001"  >$null 2>&1
+    netsh advfirewall firewall delete rule name="Ray-Workers-20000" >$null 2>&1
+    netsh advfirewall firewall add rule name="Ray-GCS-6379"     dir=in action=allow protocol=TCP localport=6379        profile=any | Out-Null
+    netsh advfirewall firewall add rule name="Ray-Client-10001"  dir=in action=allow protocol=TCP localport=10001       profile=any | Out-Null
+    netsh advfirewall firewall add rule name="Ray-Workers-20000" dir=in action=allow protocol=TCP localport=20000-29999 profile=any | Out-Null
+    # Verify
+    $check = netsh advfirewall firewall show rule name="Ray-GCS-6379" 2>&1
+    if ($check -match "Rule Name") {
+        Write-Host "  Firewall rules verified OK." -ForegroundColor Green
+    } else {
+        Write-Host "  WARNING: Firewall rule not confirmed. Connection may still work." -ForegroundColor Yellow
     }
 }
 
