@@ -140,10 +140,40 @@ function Open-WslWindow {
     }
 }
 
+# ---------------------------------------------------------------------------
+#  HELPER: add Ray firewall rules (elevates via UAC if needed)
+# ---------------------------------------------------------------------------
+function Add-RayFirewallRules {
+    Write-Host "  [FIREWALL] Adding Ray inbound rules (may show UAC prompt)..." -ForegroundColor Cyan
+    $cmds = @(
+        "netsh advfirewall firewall delete rule name='Ray-GCS-6379' >nul 2>&1",
+        "netsh advfirewall firewall delete rule name='Ray-Client-10001' >nul 2>&1",
+        "netsh advfirewall firewall delete rule name='Ray-Workers-20000' >nul 2>&1",
+        "netsh advfirewall firewall add rule name='Ray-GCS-6379'     dir=in action=allow protocol=TCP localport=6379",
+        "netsh advfirewall firewall add rule name='Ray-Client-10001' dir=in action=allow protocol=TCP localport=10001",
+        "netsh advfirewall firewall add rule name='Ray-Workers-20000' dir=in action=allow protocol=TCP localport=20000-29999"
+    )
+    $script = $cmds -join " & "
+    try {
+        $p = Start-Process cmd -ArgumentList "/c $script" -Verb RunAs -Wait -PassThru -ErrorAction Stop
+        if ($p.ExitCode -eq 0) {
+            Write-Host "  Firewall rules added successfully." -ForegroundColor Green
+        } else {
+            Write-Host "  WARNING: Firewall rule exit code $($p.ExitCode) - continuing anyway." -ForegroundColor Yellow
+        }
+    } catch {
+        Write-Host "  WARNING: Could not add firewall rules (UAC denied?)." -ForegroundColor Yellow
+        Write-Host "  Run this manually in Admin PowerShell if connection fails:" -ForegroundColor Yellow
+        Write-Host "    netsh advfirewall firewall add rule name='Ray-GCS-6379' dir=in action=allow protocol=TCP localport=6379" -ForegroundColor Gray
+    }
+}
+
 # ===========================================================================
 #  NODE A
 # ===========================================================================
 if ($Role -eq "A") {
+
+    Add-RayFirewallRules
 
     Write-Host ""
     Write-Host "  [NODE A] Getting Tailscale IP from Windows..." -ForegroundColor Cyan
@@ -381,12 +411,7 @@ if ($Role -eq "B") {
         Write-Host "  Already configured." -ForegroundColor Green
     }
 
-    # ── Open firewall for Ray ports on Tailscale range ────────────────────────
-    Write-Host "  [NODE B] Adding firewall rules for Ray ports..." -ForegroundColor Cyan
-    New-NetFirewallRule -DisplayName 'Ray GCS Tailscale'     -Direction Inbound -Protocol TCP -LocalPort 6379       -RemoteAddress '100.64.0.0/10' -Action Allow -ErrorAction SilentlyContinue | Out-Null
-    New-NetFirewallRule -DisplayName 'Ray Worker Tailscale'  -Direction Inbound -Protocol TCP -LocalPort 10001      -RemoteAddress '100.64.0.0/10' -Action Allow -ErrorAction SilentlyContinue | Out-Null
-    New-NetFirewallRule -DisplayName 'Ray Ports Tailscale'   -Direction Inbound -Protocol TCP -LocalPort 20000-29999 -RemoteAddress '100.64.0.0/10' -Action Allow -ErrorAction SilentlyContinue | Out-Null
-    Write-Host "  Firewall rules added." -ForegroundColor Green
+    Add-RayFirewallRules
 
     # ── Find Ray binary in WSL ─────────────────────────────────────────────
     Write-Host ""
@@ -448,16 +473,25 @@ echo "  ============================================================"
 echo ""
 
 # ── Check Tailscale connectivity ─────────────────────────────────────────
-echo "  [1/3] Checking connectivity to Node A (`$HEAD_IP)..."
-if ping -c2 -W3 "`$HEAD_IP" >/dev/null 2>&1; then
-    echo "  Ping OK - Tailscale tunnel is up"
+echo "  [1/3] Checking TCP connectivity to Node A (`$HEAD_IP:6379)..."
+if nc -z -w5 "`$HEAD_IP" 6379 2>/dev/null; then
+    echo "  TCP OK - Node A GCS port 6379 is reachable!"
 else
-    echo "  WARNING: Cannot ping `$HEAD_IP"
-    echo "  Make sure:"
-    echo "    1. Tailscale is running on BOTH PCs (system tray icon)"
-    echo "    2. Both are signed into the SAME Tailscale account"
-    echo "    3. Node A's ray_cluster.ps1 is still running"
-    read -rp "  Press Enter to try anyway, or Ctrl+C to cancel..."
+    echo ""
+    echo "  ERROR: Cannot reach `$HEAD_IP:6379"
+    echo "  Checklist:"
+    echo "    1. Is Node A's WSL terminal still open and showing Ray is UP?"
+    echo "    2. Is Tailscale connected on BOTH machines (system tray)?"
+    echo "    3. Are both signed into the SAME Tailscale account?"
+    echo "    4. Did Node A run ray_cluster.ps1 with Role A and accept the UAC firewall prompt?"
+    echo ""
+    echo "  Waiting 10s then retrying once..."
+    sleep 10
+    if nc -z -w5 "`$HEAD_IP" 6379 2>/dev/null; then
+        echo "  TCP OK on retry!"
+    else
+        echo "  Still unreachable. Attempting connection anyway..."
+    fi
 fi
 
 # ── Stop existing Ray ────────────────────────────────────────────────────
