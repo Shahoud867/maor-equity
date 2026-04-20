@@ -48,6 +48,12 @@ class FinBERTBundle:
             self._run("temporal",   self._pipe_tmp, tmp_texts),
         )
 
+    def flush_gpu_cache(self) -> bool:
+        import torch, gc
+        gc.collect()
+        torch.cuda.empty_cache()
+        return True
+
     def ping(self) -> bool:
         return True
 

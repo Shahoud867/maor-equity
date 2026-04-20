@@ -71,19 +71,29 @@ def run_pipeline(ticker: str, filing_type: str = "8-K") -> dict:
     timings["t_serialize_ms"] = (time.perf_counter() - t_serialize) * 1000
 
     t_transfer = time.perf_counter()
-    # FinBERT bundle runs all 3 dimensions in one call (Node B);
-    # Summarizer and tech run concurrently on Node B and Node A respectively.
+
+    # GPU SERIALIZATION: FinBERT and Phi-3-mini share one physical T1000.
+    # Running them concurrently causes OOM. We serialize them:
+    #   Phase A — FinBERT (Node B GPU) + Technical (Node A CPU) run in parallel.
+    #   Phase B — Phi-3-mini summarization (Node B GPU) starts only after
+    #             FinBERT finishes and its GPU cache is flushed.
+    # This preserves cross-node parallelism (A CPU ‖ B GPU) while preventing
+    # same-GPU concurrency between FinBERT and Phi-3-mini.
+
+    # Phase A: FinBERT on Node B GPU  ‖  Technical analysis on Node A CPU
     r_bundle = finbert.classify_all.remote(ref_mkt_payload, ref_reg_payload,
                                            ref_tmp_payload)
-    r_sum    = summarizer.process_document.remote(chunks, f"{ticker}_{filing_type}")
     r_tech   = tech.compute_indicators.remote(ticker)
 
-    mkt_r, reg_r, tmp_r = ray.get(r_bundle)   # unpack 3-tuple
+    mkt_r, reg_r, tmp_r = ray.get(r_bundle)          # wait for FinBERT
+    ray.get(finbert.flush_gpu_cache.remote())          # release cached allocs
     timings["t_transfer_ms"] = (time.perf_counter() - t_transfer) * 1000
 
+    # Phase B: Phi-3-mini summarization now has full GPU headroom
     t_deserialize = time.perf_counter()
+    r_sum  = summarizer.process_document.remote(chunks, f"{ticker}_{filing_type}")
     sum_r  = ray.get(r_sum)
-    tech_r = ray.get(r_tech)
+    tech_r = ray.get(r_tech)                           # likely already done
     timings["t_deserialize_ms"] = (time.perf_counter() - t_deserialize) * 1000
 
     timings["t_comm_total_ms"] = (

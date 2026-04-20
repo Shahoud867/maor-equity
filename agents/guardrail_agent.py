@@ -45,7 +45,7 @@ class Phi3ModelActor:
                        truncation=True, max_length=3500).to("cuda")
         with torch.no_grad():
             out = self.mdl.generate(**inp, max_new_tokens=max_new_tokens,
-                                    temperature=0.1, do_sample=False)
+                                    do_sample=False)
         return self.tok.decode(out[0][inp["input_ids"].shape[1]:], skip_special_tokens=True)
 
 
