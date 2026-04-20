@@ -18,8 +18,10 @@ class Phi3ModelActor:
     def __init__(self):
         from transformers import AutoModelForCausalLM, AutoTokenizer
         self.tok = AutoTokenizer.from_pretrained("microsoft/Phi-3-mini-4k-instruct")
+        from transformers import BitsAndBytesConfig
+        bnb = BitsAndBytesConfig(load_in_4bit=True)
         self.mdl = AutoModelForCausalLM.from_pretrained(
-            "microsoft/Phi-3-mini-4k-instruct", load_in_4bit=True, device_map="auto"
+            "microsoft/Phi-3-mini-4k-instruct", quantization_config=bnb, device_map="auto"
         )
         print("[Phi3ModelActor] Phi-3-mini loaded once — shared by summarizer + guardrail")
 
@@ -33,7 +35,7 @@ class Phi3ModelActor:
         return self.tok.decode(out[0][inp["input_ids"].shape[1]:], skip_special_tokens=True)
 
 
-@ray.remote(num_gpus=0.0)   # no extra GPU alloc — uses shared Phi3ModelActor
+@ray.remote(num_gpus=0.02)  # tiny fraction forces Node B placement (near shared model)
 class GuardrailAgent:
 
     def __init__(self, phi3_actor):

@@ -7,7 +7,7 @@ import ray
 import numpy as np
 
 
-@ray.remote(num_gpus=0.3)           # 3 actors share GPU  →  0.9 GPU total
+@ray.remote(num_gpus=0.25)          # 3 actors share GPU  →  0.75 GPU total
 class FinBERTActor:
     """One FinBERT classifier for one sentiment dimension."""
 
@@ -17,7 +17,7 @@ class FinBERTActor:
         self.min_conf  = min_confidence
         self.pipe = pipeline(
             "text-classification", model=checkpoint,
-            device=0, return_all_scores=True,
+            device=0, top_k=None,
         )
         print(f"[FinBERTActor:{dimension}] loaded {checkpoint}")
 

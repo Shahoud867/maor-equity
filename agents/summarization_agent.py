@@ -6,7 +6,7 @@ import ray
 import torch
 
 
-@ray.remote(num_gpus=0.0)   # no extra GPU alloc — uses shared Phi3ModelActor
+@ray.remote(num_gpus=0.02)  # tiny fraction forces Node B placement (near shared model)
 class SummarizationAgent:
 
     def __init__(self, phi3_actor):
