@@ -20,14 +20,18 @@ class SummarizationAgent:
         return ray.get(self.phi3.generate.remote(prompt, max_new))
 
     # ------------------------------------------------------------------
-    def map_chunk(self, chunk: dict) -> dict:
+    def map_chunk(self, chunk: dict, doc_id: str = "") -> dict:
+        # Truncate chunk text to ~800 tokens (3200 chars) so prompt + text
+        # stays within Phi-3-mini's 4096-token context window.
+        text = chunk["text"][:3200]
         prompt = (
-            "You are a financial analyst. Summarize this earnings call segment.\n"
+            f"You are a financial analyst reviewing an SEC filing ({doc_id}).\n"
+            "Summarize the following filing segment.\n"
             "Extract: (1) key financial metrics with values, "
             "(2) directional claims (growth/decline/flat), (3) named entities.\n"
             "If contradictory claims exist, preserve BOTH with [CONFLICT] tag.\n"
-            "Output: 3-5 bullet points maximum.\n\n"
-            f"Segment: {chunk['text']}\n\nSummary:"
+            "Output: 3-5 bullet points maximum. Use only information in the text below.\n\n"
+            f"Filing segment:\n{text}\n\nSummary:"
         )
         s = self._gen(prompt, 200)
         return {"chunk_id": chunk["chunk_id"], "summary": s,
@@ -55,11 +59,11 @@ class SummarizationAgent:
                                  for s in summaries)
         n_cf = sum(1 for s in summaries if s.get("has_conflict"))
         prompt = (
-            "Synthesize earnings call chunk summaries into a final equity research summary.\n"
-            "IMPORTANT: Keep all [CONFLICT] tags — do not resolve contradictions.\n\n"
-            f"Summaries:\n{combined}\n\n"
+            "Synthesize the following SEC filing chunk summaries into a final equity research note.\n"
+            "IMPORTANT: Keep all [CONFLICT] tags. Do not invent facts not present in the summaries.\n\n"
+            f"Chunk summaries:\n{combined}\n\n"
             "Produce:\n"
-            "1. Executive summary (2 sentences)\n"
+            "1. Executive summary (2 sentences, based only on the summaries above)\n"
             "2. Key financial metrics (bullets)\n"
             "3. Directional outlook (bullish/bearish/mixed)\n"
             "4. Risk flags (list any [CONFLICT] items)\n\n"
@@ -71,7 +75,7 @@ class SummarizationAgent:
     # ------------------------------------------------------------------
     def process_document(self, chunks: list, doc_id: str) -> dict:
         import ray
-        refs = {c["chunk_id"]: ray.put(self.map_chunk(c)) for c in chunks}
+        refs = {c["chunk_id"]: ray.put(self.map_chunk(c, doc_id)) for c in chunks}
         out  = self.reduce([ray.get(r) for r in refs.values()])
         out["doc_id"] = doc_id
         return out

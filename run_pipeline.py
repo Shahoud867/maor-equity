@@ -17,8 +17,8 @@ def main():
 
     os.makedirs(os.path.dirname(args.output) or ".", exist_ok=True)
 
-    # Ray's raylet splits paths on spaces when launching workers, so we symlink
-    # the project (which lives under OneDrive with spaces) to a clean path first.
+    # Symlink project to a space-free path so Ray's working_dir zip uses a
+    # clean path (the OneDrive path has spaces which confuse some tooling).
     _here = os.path.dirname(os.path.abspath(__file__))
     _symlink = "/tmp/maor_equity"
     try:
@@ -27,7 +27,7 @@ def main():
         os.symlink(_here, _symlink)
         _working_dir = _symlink
     except OSError:
-        _working_dir = _here   # fallback if symlink fails
+        _working_dir = _here
 
     ray.init(
         address=args.address,
