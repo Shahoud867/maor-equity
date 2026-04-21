@@ -34,7 +34,7 @@ class Phi3ModelActor:
         self.mdl = AutoModelForCausalLM.from_pretrained(
             "microsoft/Phi-3-mini-4k-instruct",
             quantization_config=bnb,
-            device_map="auto",
+            device_map={"": 0},
             trust_remote_code=True,
         )
         print("[Phi3ModelActor] Phi-3-mini loaded once — shared by summarizer + guardrail")
@@ -66,7 +66,7 @@ class GuardrailAgent:
             return {"direction": "unknown", "confidence": 0.0, "signals": []}
 
     def assess(self, summary: str, sentiment_vector, tech: dict) -> dict:
-        sv = sentiment_vector
+        sv = np.asarray(sentiment_vector, dtype=float)
         ss = (f"Market pos={sv[0,0]:.2f}/neg={sv[0,2]:.2f} | "
               f"Regulatory pos={sv[1,0]:.2f}/neg={sv[1,2]:.2f} | "
               f"Temporal pos={sv[2,0]:.2f}/neg={sv[2,2]:.2f}")
