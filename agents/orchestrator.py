@@ -20,28 +20,31 @@ def run_pipeline(ticker: str, filing_type: str = "8-K") -> dict:
     t0_total = time.perf_counter()
     timings  = {}
 
-    # Phi-3-mini loaded ONCE, shared by summarizer and guardrail (VRAM fix)
-    phi3        = Phi3ModelActor.remote()
+    # Phi-3-mini loaded ONCE, shared by summarizer and guardrail.
+    # Wait for Phi-3 to fully occupy GPU VRAM before FinBERT starts loading.
+    # Simultaneous loading causes a spike that exceeds 4 GB on T1000.
+    phi3 = Phi3ModelActor.remote()
+    ray.get(phi3.generate.remote("_", 1))   # blocks until weights are on GPU
 
-    # GPU actors on Node B
-    finbert     = FinBERTBundle.remote()
-    summarizer  = SummarizationAgent.remote(phi3)
-    guardrail   = GuardrailAgent.remote(phi3)
+    # Now FinBERT can load into the remaining headroom safely.
+    finbert    = FinBERTBundle.remote()
+    summarizer = SummarizationAgent.remote(phi3)
+    guardrail  = GuardrailAgent.remote(phi3)
 
-    # I/O-bound agents run locally on Node A: sec_edgar_downloader and yfinance
-    # are only installed on Node A. These complete in seconds; FinBERT/Phi-3-mini
-    # dominate latency, so local execution does not hurt end-to-end time.
-    ingestion    = IngestionAgent()
-    tech_agent   = TechnicalAnalysisAgent()
+    # Keep SEC ingestion on head node (Node A) because sec_edgar_downloader is
+    # only guaranteed there.
+    ingestion = IngestionAgent.options(resources={"node:__internal_head__": 0.001}).remote()
+    # Technical analysis is lightweight but runs as a Ray actor for API consistency.
+    tech_agent = TechnicalAnalysisAgent.options(resources={"node:__internal_head__": 0.001}).remote()
     router       = DimensionRouter()
     chunk_filter = ChunkFilter()
 
     # ── Stage 1: Ingestion (Node A, local) ───────────────────────────
     t0 = time.perf_counter()
-    filing = ingestion.fetch_filing(ticker, filing_type)
+    filing = ray.get(ingestion.fetch_filing.remote(ticker, filing_type))
     if "error" in filing:
         return {"error": filing["error"]}
-    chunks_raw = ingestion.chunk_document(filing["text"])
+    chunks_raw = ray.get(ingestion.chunk_document.remote(filing["text"]))
     timings["ingestion"] = time.perf_counter() - t0
 
     # ── Stage 1b: Chunk filtering (Node A, CPU) ──────────────────────
@@ -90,10 +93,11 @@ def run_pipeline(ticker: str, filing_type: str = "8-K") -> dict:
     # technical indicators locally; both finish before we call ray.get().
     r_bundle = finbert.classify_all.remote(ref_mkt_payload, ref_reg_payload,
                                            ref_tmp_payload)
-    tech_r   = tech_agent.compute_indicators(ticker)   # local, completes fast
+    tech_ref = tech_agent.compute_indicators.remote(ticker)
 
     mkt_r, reg_r, tmp_r = ray.get(r_bundle)          # wait for FinBERT
     ray.get(finbert.flush_gpu_cache.remote())          # release cached allocs
+    tech_r = ray.get(tech_ref)
     timings["t_transfer_ms"] = (time.perf_counter() - t_transfer) * 1000
 
     # Phase B: Phi-3-mini summarization now has full GPU headroom
@@ -113,7 +117,7 @@ def run_pipeline(ticker: str, filing_type: str = "8-K") -> dict:
 
     # ── Stage 5: Guardrail (Node B) ──────────────────────────────────
     t0 = time.perf_counter()
-    gr = ray.get(guardrail.assess.remote(sum_r["summary"], sv, tech_r))
+    gr = ray.get(guardrail.assess.remote(sum_r["summary"], sv.tolist(), tech_r))
     timings["guardrail"] = time.perf_counter() - t0
 
     timings["total"] = time.perf_counter() - t0_total
