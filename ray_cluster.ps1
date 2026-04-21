@@ -1,4 +1,4 @@
-﻿<#
+<#
 .SYNOPSIS
     Ray Cluster Setup using Tailscale VPN.
     Tailscale gives both WSL2 instances stable 100.x.x.x IPs with direct
@@ -359,17 +359,13 @@ RETRY_COUNT="PLACEHOLDER_RETRY_COUNT"
 TIMEOUT_SECONDS="PLACEHOLDER_TIMEOUT_SECONDS"
 LOG_FILE="$PROJECT/ray_node_a.log"
 
-# Ray uses sys.executable to spawn workers via bash. If that path has spaces,
-# bash splits it and execs the wrong token. Python's realpath() resolves
-# symlinks, so symlinking the venv does NOT help. Copying the actual binary
-# to /tmp (ext4, no spaces) makes sys.executable space-free permanently.
-VENV_PY=$(readlink -f "$VENV_REAL/bin/python3" 2>/dev/null \
-          || readlink -f "$VENV_REAL/bin/python" 2>/dev/null \
-          || echo "$VENV_REAL/bin/python3")
-cp "$VENV_PY" /tmp/maor_py_a && chmod +x /tmp/maor_py_a
-MAOR_PY="/tmp/maor_py_a"
-# Make venv packages visible to the copied binary (spaces in PYTHONPATH entries
-# are fine -- Python parses the colon-list without shell splitting).
+# Ray spawns workers via bash using sys.executable. Spaces in that path cause
+# bash to split at the wrong token. /usr/bin/python3.x has no spaces on Ubuntu.
+# PYTHONPATH exposes venv packages to all workers spawned by the raylet.
+MAOR_PY=$(command -v python3.12 2>/dev/null || command -v python3.11 2>/dev/null || command -v python3 2>/dev/null)
+if [ -z "$MAOR_PY" ] || echo "$MAOR_PY" | grep -qF ' '; then
+    cp "$VENV_REAL/bin/python3" /tmp/maor_py_a 2>/dev/null && chmod +x /tmp/maor_py_a && MAOR_PY="/tmp/maor_py_a"
+fi
 PY_LIB=$(ls -d "$VENV_REAL/lib/python3."* 2>/dev/null | head -1)
 export PYTHONPATH="$PY_LIB/site-packages${PYTHONPATH:+:$PYTHONPATH}"
 
@@ -764,11 +760,10 @@ LOG_FILE="$PROJECT/ray_node_b.log"
 
 # Same sys.executable fix as Node A: copy the binary to /tmp so the path
 # Ray stores for worker spawning contains no spaces.
-VENV_PY=$(readlink -f "$VENV_REAL/bin/python3" 2>/dev/null \
-          || readlink -f "$VENV_REAL/bin/python" 2>/dev/null \
-          || echo "$VENV_REAL/bin/python3")
-cp "$VENV_PY" /tmp/maor_py_b && chmod +x /tmp/maor_py_b
-MAOR_PY="/tmp/maor_py_b"
+MAOR_PY=$(command -v python3.12 2>/dev/null || command -v python3.11 2>/dev/null || command -v python3 2>/dev/null)
+if [ -z "$MAOR_PY" ] || echo "$MAOR_PY" | grep -qF ' '; then
+    cp "$VENV_REAL/bin/python3" /tmp/maor_py_b 2>/dev/null && chmod +x /tmp/maor_py_b && MAOR_PY="/tmp/maor_py_b"
+fi
 PY_LIB=$(ls -d "$VENV_REAL/lib/python3."* 2>/dev/null | head -1)
 export PYTHONPATH="$PY_LIB/site-packages${PYTHONPATH:+:$PYTHONPATH}"
 

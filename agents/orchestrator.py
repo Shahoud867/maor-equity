@@ -6,6 +6,7 @@ Run:  python agents/orchestrator.py
 import time
 import ray
 import numpy as np
+from ray.util.scheduling_strategies import NodeAffinitySchedulingStrategy
 
 from agents.ingestion_agent      import IngestionAgent
 from agents.sentiment_agent      import FinBERTBundle, DimensionRouter, aggregate_sentiment_vector
@@ -15,17 +16,33 @@ from agents.guardrail_agent      import GuardrailAgent, Phi3ModelActor
 from optimization.chunk_filter   import ChunkFilter
 
 
+def _gpu_node_strategy() -> object:
+    """Return a soft NodeAffinity for the GPU node (Node B).
+
+    Node A's venv Python lives on a path with spaces, which breaks Ray's
+    worker-spawn bash command. Pinning all actors — including CPU ones — to
+    Node B avoids that broken raylet entirely. soft=True lets Ray fall back
+    to any node if Node B is unavailable.
+    """
+    for n in ray.nodes():
+        if n.get("Alive") and n.get("Resources", {}).get("GPU", 0) > 0:
+            return NodeAffinitySchedulingStrategy(node_id=n["NodeID"], soft=True)
+    return "DEFAULT"
+
+
 def run_pipeline(ticker: str, filing_type: str = "8-K") -> dict:
     """Full distributed pipeline. Returns result dict."""
     t0_total = time.perf_counter()
     timings  = {}
 
+    gpu_node = _gpu_node_strategy()
+
     # Phi-3-mini loaded ONCE, shared by summarizer and guardrail (VRAM fix)
     phi3        = Phi3ModelActor.remote()
 
-    # Initialise remote actors (Node placement handled by Ray scheduler)
-    ingestion   = IngestionAgent.remote()
-    tech        = TechnicalAnalysisAgent.remote()
+    # CPU actors pinned to Node B so they use Node B's working Python binary.
+    ingestion   = IngestionAgent.options(scheduling_strategy=gpu_node).remote()
+    tech        = TechnicalAnalysisAgent.options(scheduling_strategy=gpu_node).remote()
     finbert     = FinBERTBundle.remote()        # single actor, 3 dimensions
     summarizer  = SummarizationAgent.remote(phi3)
     guardrail   = GuardrailAgent.remote(phi3)
