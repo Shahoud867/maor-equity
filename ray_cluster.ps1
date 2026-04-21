@@ -2,151 +2,128 @@
 .SYNOPSIS
     Ray Cluster Setup using Tailscale VPN.
     Tailscale gives both WSL2 instances stable 100.x.x.x IPs with direct
-    peer-to-peer tunnels - no heartbeat drops, no reconnect loops needed.
+    peer-to-peer tunnels -- no heartbeat drops, no reconnect loops needed.
+
+.PREREQUISITES
+    - Tailscale installed and connected on BOTH nodes (same Google/GitHub account)
+    - Ray installed in the Python venv on each node (pip install ray[default])
+    - This script MUST be run as Administrator on both nodes (self-elevates automatically)
+    - WSL2 installed on both machines (wsl --install in admin PowerShell)
 
 .HOW TO USE
-    STEP 1  Both PCs: install Tailscale for Windows from https://tailscale.com/download
-            Sign in with GOOGLE or GITHUB - use the SAME account on both PCs.
+    STEP 1  Both PCs: install Tailscale from https://tailscale.com/download
+            Sign in with GOOGLE or GITHUB -- use the SAME account on BOTH PCs.
 
     STEP 2  Node A PC:  .\ray_cluster.ps1 -Role A
-    STEP 3  Node B PC:  .\ray_cluster.ps1 -Role B   (will prompt for Node A IP)
+    STEP 3  Node B PC:  .\ray_cluster.ps1 -Role B -TailscaleIP <NodeA-100.x.x.x>
+
+.NOTES
+    Log file: ray_setup_log.txt (written to the script directory)
+    Generated WSL scripts: %USERPROFILE%\ray_cluster\nodeA.sh / nodeB.sh
 #>
 
 param(
     [ValidateSet("A","B","")]
     [string]$Role        = "",
-    [string]$TailscaleIP = ""   # Node B: paste Node A's 100.x.x.x IP here
+    [string]$TailscaleIP = ""
 )
 
 Set-StrictMode -Off
 $ErrorActionPreference = "Stop"
 
 # ---------------------------------------------------------------------------
-#  SELF-ELEVATE: firewall rules require admin — re-launch as admin if needed
+# SELF-ELEVATE: firewall rules require Administrator privileges
 # ---------------------------------------------------------------------------
-$isAdmin = ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]"Administrator")
+$isAdmin = ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole(
+    [Security.Principal.WindowsBuiltInRole]"Administrator"
+)
 if (-not $isAdmin) {
-    $args = @("-NoProfile", "-ExecutionPolicy", "Bypass", "-File", "`"$PSCommandPath`"")
-    if ($Role)        { $args += "-Role";        $args += $Role }
-    if ($TailscaleIP) { $args += "-TailscaleIP"; $args += $TailscaleIP }
-    Start-Process powershell -Verb RunAs -ArgumentList $args
+    $relaunch = @("-NoProfile", "-ExecutionPolicy", "Bypass", "-File", "`"$PSCommandPath`"")
+    if ($Role)        { $relaunch += "-Role";        $relaunch += $Role }
+    if ($TailscaleIP) { $relaunch += "-TailscaleIP"; $relaunch += $TailscaleIP }
+    Start-Process powershell -Verb RunAs -ArgumentList $relaunch
     exit
 }
 
 # ---------------------------------------------------------------------------
-#  CONFIG
+# CONFIGURATION -- Edit the values in this block before running
 # ---------------------------------------------------------------------------
+$NODE_A_TAILSCALE_IP   = "x.x.x.x"   # Auto-detected on Node A; set manually if auto-detect fails
+$NODE_B_TAILSCALE_IP   = "x.x.x.x"   # Node B Tailscale IP; set if known, else prompted at runtime
+$RAY_PORT              = 6379
+$RAY_DASHBOARD_PORT    = 8265
+$NODE_B_SSH_USER       = "username"   # Node B Linux username (reserved for future SSH use)
+$RETRY_COUNT           = 3
+$TIMEOUT_SECONDS       = 60
+
+# Node A paths (WSL/Linux format) -- local machine
 $A_VENV    = "/mnt/c/Users/shaho/OneDrive - FAST National University/Attachments/@Fast/Semester 6/PDC + NLP/maor-equity/venv"
 $A_PROJECT = "/mnt/c/Users/shaho/OneDrive - FAST National University/Attachments/@Fast/Semester 6/PDC + NLP/maor-equity"
 
-# Node B paths
+# Node B paths (WSL/Linux format) -- partner machine
 $B_VENV    = "/mnt/d/University Work/Semester 6/NLP + PDC Project/maor-equity/venv"
 $B_PROJECT = "/mnt/d/University Work/Semester 6/NLP + PDC Project/maor-equity"
 
-# Temp dir - user-writable, no admin needed (works on any machine)
-$WIN_TMP = "$env:USERPROFILE\ray_cluster"
-# Convert C:\Users\foo  →  /mnt/c/Users/foo  (handles username != foldername)
+# Temp dir for generated scripts (Windows path + WSL equivalent)
+$WIN_TMP  = "$env:USERPROFILE\ray_cluster"
 $_drive   = ($env:USERPROFILE -split ":\\")[0].ToLower()
 $_relpath = ($env:USERPROFILE -split ":\\")[1] -replace "\\","/"
 $WSL_TMP  = "/mnt/$_drive/$_relpath/ray_cluster"
 
-# ---------------------------------------------------------------------------
-#  BANNER
-# ---------------------------------------------------------------------------
-Clear-Host
-Write-Host ""
-Write-Host "  ============================================================" -ForegroundColor Cyan
-Write-Host "      maor-equity  --  Ray Cluster Setup (Tailscale VPN)     " -ForegroundColor Cyan
-Write-Host "  ============================================================" -ForegroundColor Cyan
-Write-Host ""
-Write-Host "  Tailscale VPN: stable peer-to-peer tunnel, no heartbeat drops." -ForegroundColor Gray
-Write-Host "  Tailscale gives both machines stable 100.x.x.x IPs with"   -ForegroundColor Gray
-Write-Host "  direct encrypted tunnels. No more disconnections."          -ForegroundColor Gray
-Write-Host ""
-
-# ---------------------------------------------------------------------------
-#  PRE-FLIGHT: Tailscale Windows check
-# ---------------------------------------------------------------------------
-Write-Host "  [CHECK] Tailscale on Windows..." -NoNewline
-$tsExe = "C:\Program Files\Tailscale\tailscale.exe"
-if (-not (Test-Path $tsExe)) {
-    # Try common alternate path
-    $tsExe = "$env:ProgramFiles\Tailscale\tailscale.exe"
-}
-if (Test-Path $tsExe) {
-    Write-Host " found" -ForegroundColor Green
-    try {
-        $tsStatus = & $tsExe status --json 2>$null | ConvertFrom-Json
-        $windowsTS_IP = $tsStatus.TailscaleIPs | Where-Object { $_ -match "^100\." } | Select-Object -First 1
-        if ($windowsTS_IP) {
-            Write-Host "  [CHECK] Windows Tailscale IP: $windowsTS_IP" -ForegroundColor Green
-        }
-    } catch {}
+# Log file -- next to this script (fallback to temp dir if PSScriptRoot is empty)
+if ($PSScriptRoot) {
+    $LOG_FILE = Join-Path $PSScriptRoot "ray_setup_log.txt"
 } else {
-    Write-Host " NOT INSTALLED" -ForegroundColor Yellow
-    Write-Host ""
-    Write-Host "  ACTION REQUIRED:" -ForegroundColor Yellow
-    Write-Host "    1. Download Tailscale: https://tailscale.com/download/windows" -ForegroundColor White
-    Write-Host "    2. Install and sign in (use same Google/GitHub account on BOTH PCs)" -ForegroundColor White
-    Write-Host "    3. Re-run this script" -ForegroundColor White
-    Write-Host ""
-    $open = Read-Host "  Open Tailscale download page now? (Y/N)"
-    if ($open -eq "Y" -or $open -eq "y") {
-        Start-Process "https://tailscale.com/download/windows"
+    $LOG_FILE = Join-Path $WIN_TMP "ray_setup_log.txt"
+}
+
+# ---------------------------------------------------------------------------
+# HELPERS
+# ---------------------------------------------------------------------------
+
+function Write-Log {
+    param([string]$Message, [string]$Level = "INFO")
+    $ts   = Get-Date -Format "yyyy-MM-dd HH:mm:ss"
+    $line = "[$ts] [$Level] $Message"
+    Add-Content -Path $LOG_FILE -Value $line -ErrorAction SilentlyContinue
+    switch ($Level) {
+        "ERROR" { Write-Host "  [ERROR] $Message" -ForegroundColor Red }
+        "WARN"  { Write-Host "  [WARN]  $Message" -ForegroundColor Yellow }
+        default { Write-Host "  [LOG]   $Message" -ForegroundColor Gray }
     }
-    exit 1
 }
 
-# ---------------------------------------------------------------------------
-#  WSL CHECK
-# ---------------------------------------------------------------------------
-Write-Host "  [CHECK] WSL..." -NoNewline
-try {
-    $null = wsl echo ok 2>&1
-    Write-Host " found" -ForegroundColor Green
-} catch {
-    Write-Host " NOT FOUND" -ForegroundColor Red
-    Write-Host "  Run in PowerShell Admin: wsl --install" -ForegroundColor Yellow
-    exit 1
+function Invoke-WithRetry {
+    param(
+        [scriptblock]$Action,
+        [string]$Name,
+        [int]$Retries  = $RETRY_COUNT,
+        [int]$DelaySec = 5
+    )
+    for ($i = 1; $i -le $Retries; $i++) {
+        try {
+            & $Action
+            return
+        } catch {
+            $msg = "Attempt $i/$Retries failed for '$Name': $($_.Exception.Message)"
+            Write-Log -Message $msg -Level "WARN"
+            if ($i -lt $Retries) { Start-Sleep -Seconds $DelaySec }
+            else {
+                Write-Log -Message "All $Retries attempts failed for '$Name'." -Level "ERROR"
+                throw
+            }
+        }
+    }
 }
 
-# ---------------------------------------------------------------------------
-#  ROLE SELECTION
-# ---------------------------------------------------------------------------
-if (-not $Role) {
-    Write-Host ""
-    Write-Host "  Which node are you?" -ForegroundColor Yellow
-    Write-Host "    A = Node A  (i232515 - CPU head node, your PC)"
-    Write-Host "    B = Node B  (i232634 - GPU worker, partner PC)"
-    Write-Host ""
-    $Role = (Read-Host "  Enter A or B").Trim().ToUpper()
-}
-if ($Role -notin @("A","B")) {
-    Write-Host "  ERROR: must be A or B" -ForegroundColor Red; exit 1
-}
-
-# ---------------------------------------------------------------------------
-#  TEMP DIR
-# ---------------------------------------------------------------------------
-if (-not (Test-Path $WIN_TMP)) {
-    New-Item -ItemType Directory -Path $WIN_TMP -Force | Out-Null
-}
-
-# ---------------------------------------------------------------------------
-#  HELPER: write file with Unix line endings
-# ---------------------------------------------------------------------------
 function Write-UnixFile {
     param([string]$Path, [string]$Content)
-    $utf8 = [System.Text.UTF8Encoding]::new($false)   # no BOM
+    $utf8 = [System.Text.UTF8Encoding]::new($false)
     [System.IO.File]::WriteAllText($Path, ($Content -replace "`r`n","`n"), $utf8)
 }
 
-# ---------------------------------------------------------------------------
-#  HELPER: open a new persistent WSL terminal window
-# ---------------------------------------------------------------------------
 function Open-WslWindow {
     param([string]$Title, [string]$Script)
-    # Run the script file directly - no bash -c quoting issues
     if (Get-Command wt -ErrorAction SilentlyContinue) {
         Start-Process wt -ArgumentList "new-tab","--title","""$Title""","--","wsl.exe","bash",$Script
     } else {
@@ -154,264 +131,508 @@ function Open-WslWindow {
     }
 }
 
-# ---------------------------------------------------------------------------
-#  HELPER: firewall + portproxy  (script is already admin via self-elevation)
-#  Only proxies port 6379 (GCS) - dynamic Ray ports bind AFTER proxy is set
-# ---------------------------------------------------------------------------
-function Add-RayNetworkRules {
+function Add-RayFirewallRules {
     param([string]$TsIP)
+    Write-Host "  [FIREWALL] Configuring Windows Defender Firewall for Ray..." -ForegroundColor Cyan
+    Write-Log -Message "Configuring firewall rules for $TsIP"
 
-    # Firewall: allow all Ray ports inbound
-    Write-Host "  [FIREWALL] Adding Ray inbound rules..." -ForegroundColor Cyan
-    netsh advfirewall firewall delete rule name="Ray-All-Ports" >$null 2>&1
-    netsh advfirewall firewall add rule name="Ray-All-Ports" dir=in action=allow protocol=TCP `
-        localport="6379,10001,20000-29999" profile=any | Out-Null
-    Write-Host "  Firewall rules added." -ForegroundColor Green
+    $null = netsh advfirewall firewall delete rule name="Ray-Inbound"  2>&1
+    $null = netsh advfirewall firewall delete rule name="Ray-Outbound" 2>&1
 
-    # Portproxy: only GCS port 6379 — Ray's other ports are dynamic and
-    # bind inside WSL2 AFTER this runs, so we proxy them post-start (see nodeA.sh)
-    Write-Host "  [PORTPROXY] Bridging $TsIP`:6379 -> 127.0.0.1:6379 ..." -ForegroundColor Cyan
-    netsh interface portproxy delete v4tov4 listenaddress=$TsIP listenport=6379 >$null 2>&1
-    netsh interface portproxy add    v4tov4 listenaddress=$TsIP listenport=6379 connectaddress=127.0.0.1 connectport=6379 | Out-Null
-    netsh interface portproxy delete v4tov4 listenaddress=$TsIP listenport=10001 >$null 2>&1
-    netsh interface portproxy add    v4tov4 listenaddress=$TsIP listenport=10001 connectaddress=127.0.0.1 connectport=10001 | Out-Null
+    $null = netsh advfirewall firewall add rule `
+        name="Ray-Inbound" dir=in action=allow protocol=TCP `
+        localport="$RAY_PORT,$RAY_DASHBOARD_PORT,10001,20000-29999" profile=any 2>&1
 
-    # Enable IP Helper service (required for portproxy)
-    Set-Service -Name iphlpsvc -StartupType Automatic -ErrorAction SilentlyContinue
+    $null = netsh advfirewall firewall add rule `
+        name="Ray-Outbound" dir=out action=allow protocol=TCP `
+        localport="$RAY_PORT,$RAY_DASHBOARD_PORT,10001,20000-29999" profile=any 2>&1
+
+    Write-Host "  Firewall rules added (inbound + outbound)." -ForegroundColor Green
+
+    # Portproxy bridges Tailscale IP to localhost for static Ray ports.
+    # With WSL2 mirrored networking these are usually not required, but
+    # keeping them ensures compatibility with NAT-mode WSL2 as well.
+    foreach ($port in @($RAY_PORT, $RAY_DASHBOARD_PORT, 10001)) {
+        $null = netsh interface portproxy delete v4tov4 listenaddress=$TsIP listenport=$port 2>&1
+        $null = netsh interface portproxy add    v4tov4 listenaddress=$TsIP listenport=$port `
+            connectaddress=127.0.0.1 connectport=$port 2>&1
+    }
+
+    Set-Service  -Name iphlpsvc -StartupType Automatic -ErrorAction SilentlyContinue
     Start-Service -Name iphlpsvc -ErrorAction SilentlyContinue
 
     $check = netsh interface portproxy show v4tov4 2>&1
-    if ($check -match "6379") {
-        Write-Host "  Portproxy for GCS verified OK." -ForegroundColor Green
+    if ($check -match "$RAY_PORT") {
+        Write-Host "  Portproxy verified." -ForegroundColor Green
     } else {
-        Write-Host "  WARNING: Portproxy not confirmed." -ForegroundColor Yellow
+        Write-Log -Message "Portproxy could not be confirmed." -Level "WARN"
     }
 }
 
+function Test-TailscaleReachability {
+    param([string]$TargetIP, [int]$Retries = $RETRY_COUNT)
+    Write-Host "  [TAILSCALE] Checking reachability of $TargetIP..." -ForegroundColor Cyan
+
+    for ($i = 1; $i -le $Retries; $i++) {
+        $result = ping -n 2 $TargetIP 2>&1
+        if ($result -match "TTL=" -or $result -match "bytes=") {
+            Write-Host "  Tailscale ping OK ($TargetIP)." -ForegroundColor Green
+            Write-Log -Message "Tailscale reachability confirmed: $TargetIP"
+            return $true
+        }
+        Write-Log -Message "Ping attempt $i/$Retries to $TargetIP failed." -Level "WARN"
+        if ($i -lt $Retries) {
+            Write-Host "  Ping failed (attempt $i/$Retries). Restarting Tailscale service..." -ForegroundColor Yellow
+            try {
+                Restart-Service -Name Tailscale -ErrorAction Stop
+                Start-Sleep -Seconds 5
+            } catch {
+                Write-Log -Message "Could not restart Tailscale service: $($_.Exception.Message)" -Level "WARN"
+                Start-Sleep -Seconds 3
+            }
+        }
+    }
+
+    Write-Log -Message "Tailscale IP $TargetIP is unreachable after $Retries attempts." -Level "ERROR"
+    Write-Host ""
+    Write-Host "  DIAGNOSIS: Cannot reach $TargetIP via Tailscale." -ForegroundColor Red
+    Write-Host "  Suggested fixes:" -ForegroundColor Yellow
+    Write-Host "    1. Open the Tailscale system tray icon and click Connect." -ForegroundColor White
+    Write-Host "    2. Ensure both machines are signed into the SAME Tailscale account." -ForegroundColor White
+    Write-Host "    3. Check admin.tailscale.com -- both machines should show as Connected." -ForegroundColor White
+    Write-Host "    4. In an admin PowerShell: Restart-Service Tailscale" -ForegroundColor White
+    return $false
+}
+
+# ---------------------------------------------------------------------------
+# BANNER
+# ---------------------------------------------------------------------------
+Clear-Host
+Write-Host ""
+Write-Host "  ============================================================" -ForegroundColor Cyan
+Write-Host "      maor-equity  --  Ray Cluster Setup (Tailscale VPN)     " -ForegroundColor Cyan
+Write-Host "  ============================================================" -ForegroundColor Cyan
+Write-Host ""
+Write-Host "  Log: $LOG_FILE" -ForegroundColor Gray
+Write-Host ""
+Write-Log -Message "=== Script started. Role=$Role ==="
+
+# ---------------------------------------------------------------------------
+# PRE-FLIGHT: Tailscale check
+# ---------------------------------------------------------------------------
+Write-Host "  [CHECK] Tailscale on Windows..." -NoNewline
+
+$tsExe = "$env:ProgramFiles\Tailscale\tailscale.exe"
+if (-not (Test-Path $tsExe)) { $tsExe = "C:\Program Files\Tailscale\tailscale.exe" }
+
+if (Test-Path $tsExe) {
+    Write-Host " found" -ForegroundColor Green
+    try {
+        $tsStatus    = & $tsExe status --json 2>$null | ConvertFrom-Json
+        $windowsTS_IP = $tsStatus.TailscaleIPs |
+                        Where-Object { $_ -match "^100\." } |
+                        Select-Object -First 1
+        if ($windowsTS_IP) {
+            Write-Host "  Windows Tailscale IP: $windowsTS_IP" -ForegroundColor Green
+            Write-Log -Message "Windows Tailscale IP: $windowsTS_IP"
+        }
+    } catch {
+        Write-Log -Message "Could not read Tailscale status: $($_.Exception.Message)" -Level "WARN"
+    }
+} else {
+    Write-Host " NOT INSTALLED" -ForegroundColor Red
+    Write-Log -Message "Tailscale not found." -Level "ERROR"
+    Write-Host ""
+    Write-Host "  ACTION REQUIRED:" -ForegroundColor Yellow
+    Write-Host "    1. Download Tailscale: https://tailscale.com/download/windows" -ForegroundColor White
+    Write-Host "    2. Install and sign in (use the same account on BOTH PCs)" -ForegroundColor White
+    Write-Host "    3. Re-run this script" -ForegroundColor White
+    Write-Host ""
+    $openBrowser = Read-Host "  Open Tailscale download page now? (Y/N)"
+    if ($openBrowser -eq "Y" -or $openBrowser -eq "y") {
+        Start-Process "https://tailscale.com/download/windows"
+    }
+    exit 1
+}
+
+# ---------------------------------------------------------------------------
+# PRE-FLIGHT: WSL check
+# ---------------------------------------------------------------------------
+Write-Host "  [CHECK] WSL..." -NoNewline
+try {
+    $null = wsl echo ok 2>&1
+    Write-Host " found" -ForegroundColor Green
+} catch {
+    Write-Host " NOT FOUND" -ForegroundColor Red
+    Write-Log -Message "WSL not found." -Level "ERROR"
+    Write-Host "  Run in an admin PowerShell: wsl --install" -ForegroundColor Yellow
+    exit 1
+}
+
+# ---------------------------------------------------------------------------
+# ROLE SELECTION
+# ---------------------------------------------------------------------------
+if (-not $Role) {
+    Write-Host ""
+    Write-Host "  Which node are you?" -ForegroundColor Yellow
+    Write-Host "    A = Node A  (CPU head node, your PC)"
+    Write-Host "    B = Node B  (GPU worker, partner PC)"
+    Write-Host ""
+    $Role = (Read-Host "  Enter A or B").Trim().ToUpper()
+}
+if ($Role -notin @("A","B")) {
+    Write-Log -Message "Invalid role: $Role" -Level "ERROR"
+    Write-Host "  ERROR: Role must be A or B." -ForegroundColor Red
+    exit 1
+}
+
+# ---------------------------------------------------------------------------
+# TEMP DIR
+# ---------------------------------------------------------------------------
+if (-not (Test-Path $WIN_TMP)) {
+    New-Item -ItemType Directory -Path $WIN_TMP -Force | Out-Null
+}
+
 # ===========================================================================
-#  NODE A
+# NODE A -- Head node startup
 # ===========================================================================
 if ($Role -eq "A") {
 
     Write-Host ""
-    Write-Host "  [NODE A] Getting Tailscale IP from Windows..." -ForegroundColor Cyan
+    Write-Host "  [NODE A] Detecting Tailscale IP..." -ForegroundColor Cyan
 
-    # Get Node A's Windows Tailscale IP
     $TS_IP = ""
     try {
-        $s = & $tsExe status --json 2>$null | ConvertFrom-Json
-        $TS_IP = $s.TailscaleIPs | Where-Object { $_ -match "^100\." } | Select-Object -First 1
-    } catch {}
+        $s     = & $tsExe status --json 2>$null | ConvertFrom-Json
+        $TS_IP = $s.TailscaleIPs |
+                 Where-Object { $_ -match "^100\." } |
+                 Select-Object -First 1
+    } catch {
+        Write-Log -Message "Failed to parse Tailscale status: $($_.Exception.Message)" -Level "WARN"
+    }
+
+    if (-not $TS_IP -and $NODE_A_TAILSCALE_IP -ne "x.x.x.x") {
+        $TS_IP = $NODE_A_TAILSCALE_IP
+        Write-Log -Message "Using config value for Node A IP: $TS_IP" -Level "WARN"
+    }
 
     if (-not $TS_IP) {
+        Write-Log -Message "Could not detect Node A Tailscale IP." -Level "ERROR"
         Write-Host "  ERROR: Could not get Tailscale IP." -ForegroundColor Red
-        Write-Host "  Make sure Tailscale is running and you are logged in." -ForegroundColor Yellow
-        Write-Host "  Open Tailscale system tray icon and click 'Connect'." -ForegroundColor Yellow
+        Write-Host "  Fix: Open Tailscale in the system tray and click Connect." -ForegroundColor Yellow
+        Write-Host "  Or set NODE_A_TAILSCALE_IP at the top of this script." -ForegroundColor Yellow
         exit 1
     }
 
     Write-Host "  Node A Tailscale IP: $TS_IP" -ForegroundColor Green
+    Write-Log -Message "Node A Tailscale IP: $TS_IP"
 
-    Add-RayNetworkRules -TsIP $TS_IP
+    try {
+        Add-RayFirewallRules -TsIP $TS_IP
+    } catch {
+        Write-Log -Message "Firewall setup error (non-fatal): $($_.Exception.Message)" -Level "WARN"
+        Write-Host "  WARNING: Firewall setup had errors -- continuing." -ForegroundColor Yellow
+    }
 
     Write-Host ""
-    Write-Host "  [NODE A] Writing startup script to $WIN_TMP\nodeA.sh..." -ForegroundColor Cyan
+    Write-Host "  [NODE A] Writing nodeA.sh to $WIN_TMP..." -ForegroundColor Cyan
 
     # -----------------------------------------------------------------------
-    #  NODE A BASH SCRIPT
+    # NODE A BASH SCRIPT
+    # Single-quoted heredoc: PowerShell does NOT expand anything inside.
+    # PLACEHOLDER strings are replaced below via -replace after the heredoc.
     # -----------------------------------------------------------------------
     $scriptA = @'
 #!/usr/bin/env bash
 # Node A: Ray head startup via Tailscale
-# Auto-generated by ray_cluster.ps1
+# Auto-generated by ray_cluster.ps1 -- do not edit directly
 
 set -uo pipefail
 
-VENV="PLACEHOLDER_VENV"
-RAY="$VENV/bin/ray"
+# -- Variables injected by ray_cluster.ps1 --------------------------------
+VENV_REAL="PLACEHOLDER_A_VENV"
+PROJECT="PLACEHOLDER_A_PROJECT"
 TS_IP="PLACEHOLDER_TS_IP"
-WSL_TMP="PLACEHOLDER_WSL_TMP"
+RAY_PORT="PLACEHOLDER_RAY_PORT"
+RAY_DASHBOARD_PORT="PLACEHOLDER_RAY_DASHBOARD_PORT"
+RETRY_COUNT="PLACEHOLDER_RETRY_COUNT"
+TIMEOUT_SECONDS="PLACEHOLDER_TIMEOUT_SECONDS"
+LOG_FILE="$PROJECT/ray_node_a.log"
 
+# Ray uses sys.executable to spawn workers via bash. If that path has spaces,
+# bash splits it and execs the wrong token. Python's realpath() resolves
+# symlinks, so symlinking the venv does NOT help. Copying the actual binary
+# to /tmp (ext4, no spaces) makes sys.executable space-free permanently.
+VENV_PY=$(readlink -f "$VENV_REAL/bin/python3" 2>/dev/null \
+          || readlink -f "$VENV_REAL/bin/python" 2>/dev/null \
+          || echo "$VENV_REAL/bin/python3")
+cp "$VENV_PY" /tmp/maor_py_a && chmod +x /tmp/maor_py_a
+MAOR_PY="/tmp/maor_py_a"
+# Make venv packages visible to the copied binary (spaces in PYTHONPATH entries
+# are fine -- Python parses the colon-list without shell splitting).
+PY_LIB=$(ls -d "$VENV_REAL/lib/python3."* 2>/dev/null | head -1)
+export PYTHONPATH="$PY_LIB/site-packages${PYTHONPATH:+:$PYTHONPATH}"
+
+# -- Ray environment variables ---------------------------------------------
 export LD_PRELOAD=""
 export RAY_DISABLE_JEMALLOC=1
-export RAY_raylet_start_wait_time_s=60
-export RAY_GCS_SERVER_REQUEST_TIMEOUT_SECONDS=60
+export RAY_raylet_start_wait_time_s=120
+export RAY_GCS_SERVER_REQUEST_TIMEOUT_SECONDS=120
+
+# -- Logging helper --------------------------------------------------------
+log_msg() {
+    local msg="$1"
+    echo "  [$(date '+%H:%M:%S')] $msg"
+    echo "[$(date '+%Y-%m-%d %H:%M:%S')] $msg" >> "$LOG_FILE" 2>/dev/null || true
+}
+
+# -- kill_port: free a TCP port; tries fuser, then lsof, then ss+kill ------
+# fuser is not present on all distros (absent from Ubuntu minimal images).
+kill_port() {
+    local port="$1"
+    if command -v fuser >/dev/null 2>&1; then
+        fuser -k "${port}/tcp" 2>/dev/null || true
+    elif command -v lsof >/dev/null 2>&1; then
+        lsof -ti "tcp:${port}" 2>/dev/null | xargs -r kill -9 2>/dev/null || true
+    else
+        ss -tlnp 2>/dev/null \
+            | awk -F'pid=' "/:${port} /{print \$2}" \
+            | cut -d, -f1 \
+            | xargs -r kill -9 2>/dev/null || true
+    fi
+}
+
+# -- check_tcp: test TCP reachability; falls back to /dev/tcp if nc absent --
+# nc (netcat) is not installed on all distros by default.
+check_tcp() {
+    local host="$1" port="$2" timeout="${3:-5}"
+    if command -v nc >/dev/null 2>&1; then
+        nc -z -w"$timeout" "$host" "$port" 2>/dev/null
+    else
+        timeout "$timeout" bash -c "echo >/dev/tcp/$host/$port" 2>/dev/null
+    fi
+}
 
 echo ""
 echo "  ============================================================"
-echo "  NODE A -- Ray Head (Tailscale IP: $TS_IP)"
+echo "  NODE A -- Ray Head  (Tailscale IP: $TS_IP)"
 echo "  ============================================================"
+echo "  Log: $LOG_FILE"
 echo ""
+log_msg "=== Node A startup script begun ==="
 
-# ── Verify Tailscale reachable ──────────────────────────────────────────
-echo "  [1/4] Checking Tailscale..."
-if ! ping -c1 -W2 "$TS_IP" >/dev/null 2>&1; then
-    echo "  WARNING: Cannot ping Tailscale IP $TS_IP from WSL."
-    echo "  This is OK on some systems -- continuing anyway."
+# -- Step 1: Tailscale sanity check ---------------------------------------
+log_msg "[1/4] Tailscale check..."
+if check_tcp "$TS_IP" "$RAY_PORT" 2 2>/dev/null || ping -c1 -W2 "$TS_IP" >/dev/null 2>&1; then
+    log_msg "Tailscale IP $TS_IP is reachable."
+else
+    log_msg "WARNING: Cannot reach own Tailscale IP from WSL. Continuing anyway."
 fi
-echo "  Tailscale IP: $TS_IP"
 
-# ── Kill everything ─────────────────────────────────────────────────────
-echo ""
-echo "  [2/4] Stopping existing Ray (aggressive cleanup)..."
-"$RAY" stop --force 2>/dev/null || true
-sleep 1
-pkill -9 -f gcs_server    2>/dev/null || true
-pkill -9 -f raylet         2>/dev/null || true
-pkill -9 -f plasma_store   2>/dev/null || true
-pkill -9 -f monitor.py     2>/dev/null || true
-pkill -9 -f "ray::"        2>/dev/null || true
-sleep 2
-# Force-free port 6379 if still held
-fuser -k 6379/tcp 2>/dev/null || true
-sleep 2
-rm -rf /tmp/ray /tmp/ray_* /tmp/plasma_store_socket* /tmp/session_* \
-       /tmp/ray_cluster_state.json 2>/dev/null || true
-sleep 1
+# -- Step 1b: Remove stale GCS portproxy ----------------------------------
+# WSL2 mirrored networking makes a Windows portproxy on $TS_IP:$RAY_PORT
+# visible inside WSL2 and prevents GCS from binding. Remove it first.
+# This runs an elevated Windows PowerShell via the already-admin PS session.
+powershell.exe -NoProfile -Command \
+    "netsh interface portproxy delete v4tov4 listenaddress=$TS_IP listenport=$RAY_PORT >nul 2>&1; exit 0" \
+    2>/dev/null || true
+log_msg "Removed stale GCS portproxy (if any)."
 
-# Verify port is free
-for i in 1 2 3; do
-    if ! ss -tlnp 2>/dev/null | grep -q ':6379'; then
-        echo "  Port 6379 free."
+# -- Step 1c: Add Tailscale IP as loopback alias ---------------------------
+# GCS binds to the loopback alias locally so the raylet connects without
+# going through the Tailscale userspace stack -- avoids 60s timeout.
+log_msg "Adding $TS_IP as loopback alias..."
+sudo ip addr add "${TS_IP}/32" dev lo 2>/dev/null || true
+
+# -- Step 2: Aggressive cleanup --------------------------------------------
+log_msg "[2/4] Stopping all Ray processes..."
+"$MAOR_PY" -m ray stop --force 2>/dev/null || true
+sleep 1
+pkill -9 -f gcs_server  2>/dev/null || true
+pkill -9 -f raylet       2>/dev/null || true
+pkill -9 -f plasma_store 2>/dev/null || true
+pkill -9 -f monitor.py   2>/dev/null || true
+pkill -9 -f "ray::"      2>/dev/null || true
+sleep 2
+kill_port "$RAY_PORT"
+kill_port "$RAY_DASHBOARD_PORT"
+sleep 2
+rm -rf /tmp/ray /tmp/ray_* /tmp/plasma_store_socket* /tmp/session_* 2>/dev/null || true
+log_msg "Ray cleanup done."
+
+# Verify GCS port is free (retry up to $RETRY_COUNT times)
+PORT_FREE=false
+for i in $(seq 1 $RETRY_COUNT); do
+    if ! ss -tlnp 2>/dev/null | grep -q ":${RAY_PORT}"; then
+        PORT_FREE=true
         break
     fi
-    echo "  Waiting for port 6379 to free up (attempt $i)..."
-    fuser -k 6379/tcp 2>/dev/null || true
+    log_msg "Port $RAY_PORT still occupied (attempt $i/$RETRY_COUNT) -- forcing free..."
+    kill_port "$RAY_PORT"
     sleep 3
 done
-if ss -tlnp 2>/dev/null | grep -q ':6379'; then
-    echo "  ERROR: port 6379 still occupied after cleanup."
-    echo "  Run in WSL: sudo fuser -k 6379/tcp && sudo pkill -9 gcs_server"
+
+if [ "$PORT_FREE" = "false" ]; then
+    log_msg "ERROR: Port $RAY_PORT still occupied after cleanup."
+    echo ""
+    echo "  DIAGNOSIS: Port $RAY_PORT is in use by another process."
+    echo "  Suggested fix: sudo pkill -9 gcs_server"
     read -rp "  Press Enter to exit..." && exit 1
 fi
+log_msg "Port $RAY_PORT is free."
 
-# ── Start Ray head ──────────────────────────────────────────────────────
+# -- Step 3: Start Ray head ------------------------------------------------
+log_msg "[3/4] Starting Ray head on $TS_IP:$RAY_PORT..."
 echo ""
-echo "  [3/4] Starting Ray head on $TS_IP:6379..."
+echo "  Starting Ray head node..."
 
-"$RAY" start \
+"$MAOR_PY" -m ray start \
     --head \
-    --port=6379 \
+    --port="$RAY_PORT" \
+    --include-dashboard=false \
     --node-ip-address="$TS_IP" \
     --disable-usage-stats \
-    --include-dashboard=false \
     --num-cpus=2 \
     --object-store-memory=268435456 \
     --plasma-directory=/tmp \
     2>&1
 
-if [ $? -ne 0 ]; then
+RAY_EXIT=$?
+if [ $RAY_EXIT -ne 0 ]; then
+    log_msg "ERROR: Ray start failed (exit code $RAY_EXIT)."
     echo ""
-    echo "  ERROR: Ray failed to start."
-    echo "  Close this window, reopen a fresh WSL terminal, and re-run."
+    echo "  DIAGNOSIS: Ray head failed to start."
+    echo "  Suggested fix: Close this window, open a fresh WSL terminal, and re-run."
+    read -rp "  Press Enter..." && exit 1
+fi
+log_msg "Ray start command returned OK."
+
+# -- Step 3b: Poll for GCS health -----------------------------------------
+log_msg "[3b/4] Polling GCS health (timeout: ${TIMEOUT_SECONDS}s)..."
+GCS_UP=false
+POLL_END=$((SECONDS + TIMEOUT_SECONDS))
+while [ "$SECONDS" -lt "$POLL_END" ]; do
+    if ss -tlnp 2>/dev/null | grep -q ":${RAY_PORT}"; then
+        GCS_UP=true
+        break
+    fi
+    sleep 3
+done
+
+if [ "$GCS_UP" = "false" ]; then
+    log_msg "ERROR: GCS did not bind to port $RAY_PORT within ${TIMEOUT_SECONDS}s."
+    echo ""
+    echo "  DIAGNOSIS: GCS server timed out during startup."
+    echo "  Suggested fix: cat /tmp/ray/session_latest/logs/gcs_server.out"
     read -rp "  Press Enter..." && exit 1
 fi
 
-sleep 3
-
-if ! ss -tlnp 2>/dev/null | grep -q ':6379'; then
-    echo "  ERROR: GCS did not bind to :6379"
-    read -rp "  Press Enter..." && exit 1
-fi
-
-# Check raylet alive
 RAYLET_COUNT=$(ps aux 2>/dev/null | grep '[r]aylet' | grep -v defunct | wc -l)
-echo "  Ray GCS: UP on $TS_IP:6379"
+log_msg "GCS is UP on $TS_IP:$RAY_PORT. Raylet processes: $RAYLET_COUNT"
+echo "  Ray GCS: UP on $TS_IP:$RAY_PORT"
 echo "  Raylet processes: $RAYLET_COUNT"
 
-# ── Add portproxy for dynamic raylet port ───────────────────────────────
-echo ""
-echo "  [3b/4] Adding portproxy for dynamic Ray ports..."
-RAYLET_PORT=$(ps aux 2>/dev/null | grep '[r]aylet' | grep -oP '\-\-node_manager_port=\K[0-9]+' | head -1)
-OBJ_PORT=$(ps aux 2>/dev/null | grep '[r]aylet' | grep -oP '\-\-object_manager_port=\K[0-9]+' | head -1)
-if [ -n "$RAYLET_PORT" ]; then
-    powershell.exe -NoProfile -Command "
-        netsh interface portproxy delete v4tov4 listenaddress=$TS_IP listenport=$RAYLET_PORT >nul 2>&1
-        netsh interface portproxy add    v4tov4 listenaddress=$TS_IP listenport=$RAYLET_PORT connectaddress=127.0.0.1 connectport=$RAYLET_PORT
-        if ('$OBJ_PORT') {
-            netsh interface portproxy delete v4tov4 listenaddress=$TS_IP listenport=$OBJ_PORT >nul 2>&1
-            netsh interface portproxy add    v4tov4 listenaddress=$TS_IP listenport=$OBJ_PORT connectaddress=127.0.0.1 connectport=$OBJ_PORT
-        }
-    " 2>/dev/null && echo "  Portproxy added: raylet=$RAYLET_PORT obj=$OBJ_PORT" || echo "  (portproxy skipped - run as admin if needed)"
-else
-    echo "  Could not detect raylet port - skipping dynamic portproxy"
+if [ "$RAYLET_COUNT" -eq 0 ]; then
+    log_msg "WARNING: No raylet processes found. Ray may still be initializing."
 fi
 
-# ── Print connection info ────────────────────────────────────────────────
+# -- Step 3c: Detect dynamic raylet ports (log only, no portproxy from bash)
+# With WSL2 mirrored networking the Tailscale interface is shared between
+# Windows and WSL2, so dynamic raylet ports are reachable via $TS_IP directly
+# without any portproxy. We log the ports for diagnostic purposes only.
+# grep -o + sed is used instead of grep -oP (Perl regex not portable).
+RAYLET_PORT=$(ps aux 2>/dev/null | grep '[r]aylet' \
+    | grep -o '\-\-node_manager_port=[0-9]*' | head -1 | sed 's/.*=//')
+OBJ_PORT=$(ps aux 2>/dev/null | grep '[r]aylet' \
+    | grep -o '\-\-object_manager_port=[0-9]*' | head -1 | sed 's/.*=//')
+log_msg "Dynamic ports detected: raylet=$RAYLET_PORT obj=$OBJ_PORT"
+
+# -- Step 4: Print connection info for Node B -----------------------------
 echo ""
 echo "  ============================================================"
-echo "  NODE A IS READY -- Send this to Node B:"
+echo "  NODE A IS READY -- Send these commands to Node B:"
 echo "  ============================================================"
 echo ""
-echo "  PowerShell command for Node B:"
+echo "  PowerShell command (run on Node B):"
 echo "    .\\ray_cluster.ps1 -Role B -TailscaleIP $TS_IP"
 echo ""
-echo "  OR manual WSL command for Node B:"
+echo "  OR manual WSL command (run in Node B WSL):"
 echo "    export LD_PRELOAD=''"
 echo "    export RAY_DISABLE_JEMALLOC=1"
 echo "    export CUDA_VISIBLE_DEVICES=0"
-echo "    ray start --address=$TS_IP:6379 --num-gpus=1 --num-cpus=4"
+echo "    ray start --address=$TS_IP:$RAY_PORT --num-gpus=1 --num-cpus=4"
+echo ""
+echo "  Dashboard: http://$TS_IP:$RAY_DASHBOARD_PORT"
 echo ""
 echo "  ============================================================"
 echo "  KEEP THIS WINDOW OPEN -- closing it stops Ray"
 echo "  ============================================================"
 echo ""
 
-# ── Monitor loop ────────────────────────────────────────────────────────
-echo "  [4/4] Monitoring every 30s (Ctrl+C stops monitor, Ray stays up):"
+log_msg "[4/4] Entering monitor loop (Ctrl+C stops monitor, Ray stays running)."
+echo "  Monitoring every 30s -- waiting for Node B to join..."
 echo "  ------------------------------------------------------------------"
+
+NODE_B_SEEN=false
 
 while true; do
     sleep 30
     NOW=$(date '+%H:%M:%S')
 
-    # Check GCS
-    if ss -tlnp 2>/dev/null | grep -q ':6379'; then
+    if ss -tlnp 2>/dev/null | grep -q ":${RAY_PORT}"; then
         GCS_STATUS="Ray:UP"
     else
         GCS_STATUS="Ray:DOWN"
+        log_msg "WARNING: GCS is no longer bound to port $RAY_PORT."
     fi
 
-    # Count nodes + write state file
-    NODES=$("$VENV/bin/python3" -c "
-import ray, os, sys, json, time
-os.environ['RAY_DISABLE_JEMALLOC']='1'
-os.environ['LD_PRELOAD']=''
-os.environ['RAY_ACCEL_ENV_VAR_OVERRIDE_ON_ZERO']='0'
+    # Count alive nodes via Python. timeout 15 prevents hangs.
+    # sys.stdout.flush() + os._exit(0) ensures output is written before exit.
+    NODES=$(timeout 15 "$MAOR_PY" -c "
+import ray, sys, os
+os.environ['RAY_DISABLE_JEMALLOC'] = '1'
+os.environ['LD_PRELOAD'] = ''
 try:
-    ray.init(address='${TS_IP}:6379', ignore_reinit_error=True, logging_level='ERROR')
-    nodes = ray.nodes()
-    cr    = dict(ray.cluster_resources())
-    alive = [n for n in nodes if n.get('Alive')]
-    state = {
-        'ts':      time.time(),
-        'alive':   [{'ip': n.get('NodeManagerAddress',''), 'cpu': n.get('Resources',{}).get('CPU',0), 'gpu': n.get('Resources',{}).get('GPU',0)} for n in alive],
-        'dead_ips':[n.get('NodeManagerAddress','') for n in nodes if not n.get('Alive')],
-        'cr':      {k: float(v) for k, v in cr.items() if isinstance(v,(int,float))},
-        'cr_keys': list(cr.keys()),
-    }
-    with open('/tmp/ray_cluster_state.json','w') as f: json.dump(state,f)
-    sys.stdout.write(str(len(alive))+'\n')
-    sys.stdout.flush()
-except Exception as e:
+    ray.init(address='${TS_IP}:${RAY_PORT}', ignore_reinit_error=True, logging_level='ERROR')
+    alive = [n for n in ray.nodes() if n.get('Alive')]
+    sys.stdout.write(str(len(alive)) + '\n')
+except Exception:
     sys.stdout.write('?\n')
-    sys.stdout.flush()
 finally:
+    sys.stdout.flush()
     os._exit(0)
-" 2>/dev/null)
+" 2>/dev/null || echo "?")
 
-    echo "  [$NOW] $GCS_STATUS | Alive nodes: $NODES | Head: $TS_IP:6379"
+    echo "  [$NOW] $GCS_STATUS | Alive nodes: $NODES | Head: $TS_IP:$RAY_PORT"
+
+    # Announce the first time Node B is seen (node count reaches 2+)
+    if [ "$NODES" != "?" ] && [ "$NODE_B_SEEN" = "false" ]; then
+        NODE_COUNT_INT=$(echo "$NODES" | tr -d '[:space:]')
+        if [ -n "$NODE_COUNT_INT" ] && [ "$NODE_COUNT_INT" -ge 2 ] 2>/dev/null; then
+            NODE_B_SEEN=true
+            log_msg "SUCCESS: Node B joined. Alive nodes: $NODE_COUNT_INT"
+            echo ""
+            echo "  ============================================================"
+            echo "  SUCCESS: Node B is connected! Cluster has $NODE_COUNT_INT alive nodes."
+            echo "  Dashboard: http://$TS_IP:$RAY_DASHBOARD_PORT"
+            echo "  ============================================================"
+            echo ""
+        fi
+    fi
 done
 
 echo ""
 read -rp "  === Script ended. Press Enter to close ==="
 '@
 
-    # Inject variables
     $scriptA = $scriptA `
-        -replace 'PLACEHOLDER_VENV',    $A_VENV `
-        -replace 'PLACEHOLDER_TS_IP',   $TS_IP `
-        -replace 'PLACEHOLDER_WSL_TMP', $WSL_TMP
+        -replace 'PLACEHOLDER_A_VENV',            $A_VENV `
+        -replace 'PLACEHOLDER_A_PROJECT',          $A_PROJECT `
+        -replace 'PLACEHOLDER_TS_IP',              $TS_IP `
+        -replace 'PLACEHOLDER_RAY_PORT',           $RAY_PORT `
+        -replace 'PLACEHOLDER_RAY_DASHBOARD_PORT', $RAY_DASHBOARD_PORT `
+        -replace 'PLACEHOLDER_RETRY_COUNT',        $RETRY_COUNT `
+        -replace 'PLACEHOLDER_TIMEOUT_SECONDS',    $TIMEOUT_SECONDS
 
     Write-UnixFile -Path "$WIN_TMP\nodeA.sh" -Content $scriptA
     wsl chmod +x "$WSL_TMP/nodeA.sh" 2>$null
@@ -427,17 +648,20 @@ read -rp "  === Script ended. Press Enter to close ==="
     Write-Host "  Tell your partner (Node B) to run:" -ForegroundColor Cyan
     Write-Host "    .\ray_cluster.ps1 -Role B -TailscaleIP $TS_IP" -ForegroundColor White
     Write-Host ""
-    Write-Host "  After Node B connects, verify (in a new PowerShell tab):" -ForegroundColor Cyan
-    Write-Host "    wsl bash -c `"cd '$A_PROJECT' && source venv/bin/activate && python verify_cluster.py`"" -ForegroundColor White
+    Write-Host "  After Node B connects, verify with:" -ForegroundColor Cyan
+    Write-Host "    wsl bash -c `"source '$A_VENV/bin/activate' && ray status`"" -ForegroundColor White
     Write-Host "  ============================================================" -ForegroundColor Green
+    Write-Log -Message "Node A setup complete. WSL window opened. TS_IP=$TS_IP"
 }
 
 # ===========================================================================
-#  NODE B
+# NODE B -- Worker node startup
 # ===========================================================================
 if ($Role -eq "B") {
 
-    # ── Get Node A's Tailscale IP ──────────────────────────────────────────
+    if (-not $TailscaleIP -and $NODE_B_TAILSCALE_IP -ne "x.x.x.x") {
+        $TailscaleIP = $NODE_B_TAILSCALE_IP
+    }
     if (-not $TailscaleIP) {
         Write-Host ""
         Write-Host "  Enter Node A's Tailscale IP (shown in Node A's terminal)." -ForegroundColor Yellow
@@ -447,163 +671,283 @@ if ($Role -eq "B") {
     }
 
     if ($TailscaleIP -notmatch '^100\.\d+\.\d+\.\d+$') {
+        Write-Log -Message "Invalid Tailscale IP: $TailscaleIP" -Level "ERROR"
         Write-Host "  ERROR: Tailscale IPs start with 100. Got: $TailscaleIP" -ForegroundColor Red
         exit 1
     }
 
-    # ── Enable WSL2 mirrored networking (required for Tailscale in WSL) ──────
+    Write-Log -Message "Node B will connect to head at $TailscaleIP"
+
+    $reachable = Test-TailscaleReachability -TargetIP $TailscaleIP -Retries $RETRY_COUNT
+    if (-not $reachable) {
+        Write-Log -Message "Aborting: Node A at $TailscaleIP is unreachable." -Level "ERROR"
+        exit 1
+    }
+
     Write-Host "  [NODE B] Configuring WSL2 mirrored networking..." -ForegroundColor Cyan
-    $wslCfg = Join-Path $env:USERPROFILE ".wslconfig"
+    $wslCfg     = Join-Path $env:USERPROFILE ".wslconfig"
     $cfgContent = "[wsl2]`nnetworkingMode=mirrored`n"
     if (-not (Test-Path $wslCfg) -or (Get-Content $wslCfg -Raw) -notmatch 'mirrored') {
         Set-Content -Path $wslCfg -Value $cfgContent -Encoding UTF8
-        Write-Host "  .wslconfig written - shutting down WSL to apply..." -ForegroundColor Yellow
+        Write-Host "  .wslconfig written -- restarting WSL to apply..." -ForegroundColor Yellow
         wsl --shutdown 2>$null
         Start-Sleep -Seconds 3
         Write-Host "  WSL restarted with mirrored networking." -ForegroundColor Green
+        Write-Log -Message "WSL2 mirrored networking enabled."
     } else {
         Write-Host "  Already configured." -ForegroundColor Green
     }
 
-    Add-RayNetworkRules -TsIP $TailscaleIP
+    try {
+        Add-RayFirewallRules -TsIP $TailscaleIP
+    } catch {
+        Write-Log -Message "Firewall setup error on Node B (non-fatal): $($_.Exception.Message)" -Level "WARN"
+        Write-Host "  WARNING: Firewall setup had errors -- continuing." -ForegroundColor Yellow
+    }
 
-    # ── Find Ray binary in WSL ─────────────────────────────────────────────
+    # Locate Ray binary via a temp bash script to avoid -lc quoting issues
+    # with paths that contain spaces.
     Write-Host ""
-    Write-Host "  [NODE B] Finding Ray in WSL..." -NoNewline
+    Write-Host "  [NODE B] Locating Ray binary in WSL..." -NoNewline
 
-    $rayBin = wsl bash -lc "[ -x '/mnt/d/University Work/Semester 6/NLP + PDC Project/maor-equity/venv/bin/ray' ] && echo '/mnt/d/University Work/Semester 6/NLP + PDC Project/maor-equity/venv/bin/ray'" 2>$null
-    if (-not $rayBin) {
-        $rayBin = wsl bash -lc '[ -x "$HOME/maor-equity/venv/bin/ray" ] && echo "$HOME/maor-equity/venv/bin/ray"' 2>$null
-    }
-    if (-not $rayBin) {
-        $rayBin = wsl bash -lc '[ -x "$HOME/venv/bin/ray" ] && echo "$HOME/venv/bin/ray"' 2>$null
-    }
-    if (-not $rayBin) {
-        $rayBin = wsl bash -lc "[ -x '/usr/local/bin/ray' ] && echo '/usr/local/bin/ray'" 2>$null
-    }
-    if (-not $rayBin) {
-        $rayBin = wsl bash -lc "which ray 2>/dev/null || true" 2>$null
-    }
+    $detectSh = "$WIN_TMP\_detect_ray.sh"
+    # PS double-quoted string: $B_VENV is expanded here; single quotes in the
+    # generated bash file protect the spaces within the path.
+    $detectContent  = "#!/usr/bin/env bash`n"
+    $detectContent += "if [ -x '$B_VENV/bin/ray' ]; then echo '$B_VENV/bin/ray'; exit 0; fi`n"
+    $detectContent += 'if [ -x "$HOME/maor-equity/venv/bin/ray" ]; then echo "$HOME/maor-equity/venv/bin/ray"; exit 0; fi' + "`n"
+    $detectContent += 'if [ -x "$HOME/venv/bin/ray" ]; then echo "$HOME/venv/bin/ray"; exit 0; fi' + "`n"
+    $detectContent += "which ray 2>/dev/null || true`n"
+    Write-UnixFile -Path $detectSh -Content $detectContent
+    wsl chmod +x "$WSL_TMP/_detect_ray.sh" 2>$null
 
-    $rayBin = ($rayBin | Where-Object { $_ -match '/ray' } | Select-Object -First 1)
-    if ($rayBin) {
-        $rayBin = $rayBin.Trim()
-    }
+    $rayBinRaw = wsl bash "$WSL_TMP/_detect_ray.sh" 2>$null
+    $rayBin    = ($rayBinRaw | Where-Object { $_ -match '/ray' } | Select-Object -First 1)
+    if ($rayBin) { $rayBin = $rayBin.Trim() }
 
     if (-not $rayBin) {
         Write-Host " NOT FOUND" -ForegroundColor Red
+        Write-Log -Message "Ray binary not found in WSL on Node B." -Level "ERROR"
         Write-Host ""
-        Write-Host "  Ray not found. In WSL, run:" -ForegroundColor Yellow
-        Write-Host "    git clone https://github.com/Shahoud867/maor-equity ~/maor-equity" -ForegroundColor White
-        Write-Host "    cd ~/maor-equity" -ForegroundColor White
-        Write-Host "    python3 -m venv venv && source venv/bin/activate" -ForegroundColor White
+        Write-Host "  Ray not found in WSL. Run these commands inside WSL to install:" -ForegroundColor Yellow
+        Write-Host "    cd '$B_PROJECT'" -ForegroundColor White
+        Write-Host "    python3 -m venv venv" -ForegroundColor White
+        Write-Host "    source venv/bin/activate" -ForegroundColor White
         Write-Host "    pip install ray[default]" -ForegroundColor White
         exit 1
     }
 
     Write-Host " $rayBin" -ForegroundColor Green
+    Write-Log -Message "Ray binary found at: $rayBin"
 
-    Write-Host "  [NODE B] Writing connection script..." -ForegroundColor Cyan
+    Write-Host "  [NODE B] Writing nodeB.sh..." -ForegroundColor Cyan
 
     # -----------------------------------------------------------------------
-    #  NODE B BASH SCRIPT
+    # NODE B BASH SCRIPT
+    # Single-quoted heredoc -- PLACEHOLDER strings replaced below.
     # -----------------------------------------------------------------------
-    $scriptB = @"
+    $scriptB = @'
 #!/usr/bin/env bash
-# Node B: Ray worker - connects to Node A via Tailscale
-# Auto-generated by ray_cluster.ps1
+# Node B: Ray worker -- connects to Node A via Tailscale
+# Auto-generated by ray_cluster.ps1 -- do not edit directly
 
-HEAD_IP="$TailscaleIP"
-RAY="$rayBin"
+set -uo pipefail
 
+# -- Variables injected by ray_cluster.ps1 --------------------------------
+HEAD_IP="PLACEHOLDER_HEAD_IP"
+RAY_PORT="PLACEHOLDER_RAY_PORT"
+VENV_REAL="PLACEHOLDER_B_VENV"
+PROJECT="PLACEHOLDER_B_PROJECT"
+RETRY_COUNT="PLACEHOLDER_RETRY_COUNT"
+TIMEOUT_SECONDS="PLACEHOLDER_TIMEOUT_SECONDS"
+LOG_FILE="$PROJECT/ray_node_b.log"
+
+# Same sys.executable fix as Node A: copy the binary to /tmp so the path
+# Ray stores for worker spawning contains no spaces.
+VENV_PY=$(readlink -f "$VENV_REAL/bin/python3" 2>/dev/null \
+          || readlink -f "$VENV_REAL/bin/python" 2>/dev/null \
+          || echo "$VENV_REAL/bin/python3")
+cp "$VENV_PY" /tmp/maor_py_b && chmod +x /tmp/maor_py_b
+MAOR_PY="/tmp/maor_py_b"
+PY_LIB=$(ls -d "$VENV_REAL/lib/python3."* 2>/dev/null | head -1)
+export PYTHONPATH="$PY_LIB/site-packages${PYTHONPATH:+:$PYTHONPATH}"
+
+# -- Ray environment variables ---------------------------------------------
 export LD_PRELOAD=""
 export RAY_DISABLE_JEMALLOC=1
 export CUDA_VISIBLE_DEVICES=0
 
-echo ""
-echo "  ============================================================"
-echo "  NODE B -- Ray Worker (connecting to `$HEAD_IP:6379)"
-echo "  ============================================================"
-echo ""
+# -- Logging helper --------------------------------------------------------
+log_msg() {
+    local msg="$1"
+    echo "  [$(date '+%H:%M:%S')] $msg"
+    echo "[$(date '+%Y-%m-%d %H:%M:%S')] $msg" >> "$LOG_FILE" 2>/dev/null || true
+}
 
-# ── Check Tailscale connectivity ─────────────────────────────────────────
-echo "  [1/3] Checking TCP connectivity to Node A (`$HEAD_IP:6379)..."
-if nc -z -w5 "`$HEAD_IP" 6379 2>/dev/null; then
-    echo "  TCP OK - Node A GCS port 6379 is reachable!"
-else
-    echo ""
-    echo "  ERROR: Cannot reach `$HEAD_IP:6379"
-    echo "  Checklist:"
-    echo "    1. Is Node A's WSL terminal still open and showing Ray is UP?"
-    echo "    2. Is Tailscale connected on BOTH machines (system tray)?"
-    echo "    3. Are both signed into the SAME Tailscale account?"
-    echo "    4. Did Node A run ray_cluster.ps1 with Role A and accept the UAC firewall prompt?"
-    echo ""
-    echo "  Waiting 10s then retrying once..."
-    sleep 10
-    if nc -z -w5 "`$HEAD_IP" 6379 2>/dev/null; then
-        echo "  TCP OK on retry!"
+# -- kill_port: fuser -> lsof -> ss fallback --------------------------------
+kill_port() {
+    local port="$1"
+    if command -v fuser >/dev/null 2>&1; then
+        fuser -k "${port}/tcp" 2>/dev/null || true
+    elif command -v lsof >/dev/null 2>&1; then
+        lsof -ti "tcp:${port}" 2>/dev/null | xargs -r kill -9 2>/dev/null || true
     else
-        echo "  Still unreachable. Attempting connection anyway..."
+        ss -tlnp 2>/dev/null \
+            | awk -F'pid=' "/:${port} /{print \$2}" \
+            | cut -d, -f1 \
+            | xargs -r kill -9 2>/dev/null || true
     fi
+}
+
+# -- check_tcp: nc -> /dev/tcp fallback ------------------------------------
+check_tcp() {
+    local host="$1" port="$2" timeout="${3:-5}"
+    if command -v nc >/dev/null 2>&1; then
+        nc -z -w"$timeout" "$host" "$port" 2>/dev/null
+    else
+        timeout "$timeout" bash -c "echo >/dev/tcp/$host/$port" 2>/dev/null
+    fi
+}
+
+echo ""
+echo "  ============================================================"
+echo "  NODE B -- Ray Worker  (connecting to $HEAD_IP:$RAY_PORT)"
+echo "  ============================================================"
+echo "  Log: $LOG_FILE"
+echo ""
+log_msg "=== Node B startup script begun ==="
+
+# -- Step 1: TCP connectivity check ---------------------------------------
+log_msg "[1/3] Checking TCP connectivity to $HEAD_IP:$RAY_PORT..."
+CONNECTED=false
+for i in $(seq 1 $RETRY_COUNT); do
+    if check_tcp "$HEAD_IP" "$RAY_PORT" 5; then
+        CONNECTED=true
+        log_msg "TCP connection to $HEAD_IP:$RAY_PORT confirmed OK."
+        break
+    fi
+    log_msg "Attempt $i/$RETRY_COUNT: $HEAD_IP:$RAY_PORT unreachable. Waiting 10s..."
+    sleep 10
+done
+
+if [ "$CONNECTED" = "false" ]; then
+    log_msg "WARNING: Cannot reach $HEAD_IP:$RAY_PORT after $RETRY_COUNT attempts."
+    echo ""
+    echo "  DIAGNOSIS: Cannot connect to Node A at $HEAD_IP:$RAY_PORT"
+    echo "  Checklist:"
+    echo "    1. Is Node A WSL terminal open and showing Ray:UP?"
+    echo "    2. Is Tailscale connected on BOTH machines (system tray icon)?"
+    echo "    3. Are both machines signed into the SAME Tailscale account?"
+    echo "    4. Did Node A run ray_cluster.ps1 -Role A and accept the UAC prompt?"
+    echo "  Attempting to join anyway -- it may still succeed..."
 fi
 
-# ── Stop existing Ray ────────────────────────────────────────────────────
-echo ""
-echo "  [2/3] Stopping existing Ray..."
-"`$RAY" stop --force 2>/dev/null || true
+# -- Step 2: Cleanup -------------------------------------------------------
+log_msg "[2/3] Stopping existing Ray processes..."
+"$MAOR_PY" -m ray stop --force 2>/dev/null || true
+sleep 1
+pkill -9 -f raylet       2>/dev/null || true
+pkill -9 -f plasma_store 2>/dev/null || true
 sleep 2
+rm -rf /tmp/ray /tmp/ray_* /tmp/plasma_store_socket* 2>/dev/null || true
+log_msg "Cleanup done."
 
-# ── Connect to head ──────────────────────────────────────────────────────
-echo "  [3/3] Connecting to Ray head at `$HEAD_IP:6379..."
-
+# -- connect_worker: stop stale Ray then join the head --------------------
 connect_worker() {
-    "`$RAY" stop --force 2>/dev/null || true
+    "$MAOR_PY" -m ray stop --force 2>/dev/null || true
     sleep 2
-    "`$RAY" start \
-        --address="`$HEAD_IP:6379" \
+    "$MAOR_PY" -m ray start \
+        --address="$HEAD_IP:$RAY_PORT" \
         --num-gpus=1 \
         --num-cpus=4 \
         2>&1
 }
 
-connect_worker
+# -- Step 3: Join the cluster with retries --------------------------------
+log_msg "[3/3] Joining Ray cluster at $HEAD_IP:$RAY_PORT..."
+JOIN_OK=false
+for i in $(seq 1 $RETRY_COUNT); do
+    log_msg "Join attempt $i/$RETRY_COUNT..."
+    connect_worker
+    sleep 5
+    if pgrep -f raylet >/dev/null 2>&1; then
+        JOIN_OK=true
+        log_msg "SUCCESS: Raylet process confirmed alive (attempt $i)."
+        break
+    fi
+    log_msg "Raylet not found after attempt $i. Retrying..."
+    sleep 5
+done
+
+if [ "$JOIN_OK" = "false" ]; then
+    log_msg "ERROR: Failed to join Ray cluster after $RETRY_COUNT attempts."
+    echo ""
+    echo "  DIAGNOSIS: Raylet did not start after $RETRY_COUNT join attempts."
+    echo "  Suggested fixes:"
+    echo "    1. Verify Ray versions match on both nodes: ray --version"
+    echo "    2. Check Node B raylet logs:"
+    echo "       cat /tmp/ray/session_latest/logs/raylet.out"
+    echo "    3. Ensure Node A is running and $HEAD_IP:$RAY_PORT is reachable."
+    read -rp "  Press Enter to exit..." && exit 1
+fi
 
 echo ""
 echo "  ============================================================"
-echo "  CONNECTED! Watching for disconnects every 10s..."
+echo "  CONNECTED! Worker joined $HEAD_IP:$RAY_PORT"
+echo "  Monitoring every 10s -- auto-reconnects on disconnect."
 echo "  ============================================================"
 echo ""
 
-# Watch loop - NEVER calls ray.init() or ray.shutdown()
-# Only checks: (1) is raylet process alive? (2) can we TCP to head?
+# -- Monitor loop: auto-reconnect if raylet dies or TCP drops --------------
 while true; do
     sleep 10
-    NOW=`$(date '+%H:%M:%S')
+    NOW=$(date '+%H:%M:%S')
 
-    # Check 1: raylet process
-    if ! pgrep -f raylet >/dev/null 2>&1; then
-        echo "  [`$NOW] RAYLET DIED - reconnecting..."
+    RAYLET_ALIVE=false
+    pgrep -f raylet >/dev/null 2>&1 && RAYLET_ALIVE=true
+
+    TCP_OK=false
+    check_tcp "$HEAD_IP" "$RAY_PORT" 4 && TCP_OK=true
+
+    if [ "$RAYLET_ALIVE" = "true" ] && [ "$TCP_OK" = "true" ]; then
+        echo "  [$NOW] OK -- raylet alive, connected to $HEAD_IP:$RAY_PORT"
+    elif [ "$RAYLET_ALIVE" = "false" ]; then
+        log_msg "[$NOW] RAYLET DIED -- reconnecting..."
         connect_worker
-        continue
-    fi
-
-    # Check 2: TCP to Node A Tailscale IP
-    if ! nc -z -w4 "`$HEAD_IP" 6379 2>/dev/null; then
-        echo "  [`$NOW] LOST CONNECTION to `$HEAD_IP:6379 - reconnecting..."
+    else
+        log_msg "[$NOW] LOST CONNECTION to $HEAD_IP:$RAY_PORT -- reconnecting..."
         connect_worker
-        continue
     fi
-
-    echo "  [`$NOW] OK - raylet alive, connected to `$HEAD_IP:6379"
 done
 
 echo ""
 read -rp "  === Script ended. Press Enter to close ==="
-"@
+'@
+
+    $scriptB = $scriptB `
+        -replace 'PLACEHOLDER_HEAD_IP',        $TailscaleIP `
+        -replace 'PLACEHOLDER_RAY_PORT',        $RAY_PORT `
+        -replace 'PLACEHOLDER_B_VENV',          $B_VENV `
+        -replace 'PLACEHOLDER_B_PROJECT',       $B_PROJECT `
+        -replace 'PLACEHOLDER_RETRY_COUNT',     $RETRY_COUNT `
+        -replace 'PLACEHOLDER_TIMEOUT_SECONDS', $TIMEOUT_SECONDS
 
     Write-UnixFile -Path "$WIN_TMP\nodeB.sh" -Content $scriptB
     wsl chmod +x "$WSL_TMP/nodeB.sh" 2>$null
+
+    # Generate a standalone Node B PS1 script (zero-config, just run it on Node B).
+    # Uses $PSCommandPath (the actual full path of this script) so the standalone
+    # script works regardless of what directory Node B runs it from.
+    Write-Host "  [NODE B] Generating standalone node_b_standalone.ps1..." -ForegroundColor Cyan
+    $standalonePath    = Join-Path $WIN_TMP "node_b_standalone.ps1"
+    $mainScriptPath    = if ($PSCommandPath) { $PSCommandPath } else { Join-Path $PSScriptRoot "ray_cluster.ps1" }
+    $standaloneContent = "# node_b_standalone.ps1 -- Run this on Node B. All values are pre-filled.`r`n"
+    $standaloneContent += "# Prerequisites: Tailscale connected, Ray installed in venv on Node B.`r`n"
+    $standaloneContent += "`$TailscaleIP = `"$TailscaleIP`"`r`n"
+    $standaloneContent += "& `"$mainScriptPath`" -Role B -TailscaleIP `$TailscaleIP`r`n"
+    Set-Content -Path $standalonePath -Value $standaloneContent -Encoding UTF8
+    Write-Host "  Standalone script: $standalonePath" -ForegroundColor Gray
+    Write-Log -Message "Standalone Node B script written to: $standalonePath"
 
     Open-WslWindow -Title "NODE B - Ray Worker" -Script "$WSL_TMP/nodeB.sh"
 
@@ -611,15 +955,21 @@ read -rp "  === Script ended. Press Enter to close ==="
     Write-Host "  ============================================================" -ForegroundColor Green
     Write-Host "  Node B connection window opened!" -ForegroundColor Green
     Write-Host ""
-    Write-Host "  Watch that window -- it will print every 10s:" -ForegroundColor Cyan
-    Write-Host "    OK - raylet alive, connected to $TailscaleIP:6379" -ForegroundColor Gray
+    Write-Host "  Watch that window -- it prints every 10s:" -ForegroundColor Cyan
+    Write-Host "    OK -- raylet alive, connected to ${TailscaleIP}:${RAY_PORT}" -ForegroundColor Gray
     Write-Host ""
-    Write-Host "  If it shows RECONNECTING that is normal and automatic." -ForegroundColor Gray
+    Write-Host "  RECONNECTING messages are normal and automatic." -ForegroundColor Gray
     Write-Host ""
-    Write-Host "  Tell Node A to run verify_cluster.py after ~30s." -ForegroundColor Cyan
+    Write-Host "  Standalone script for Node B (zero-config, copy to Node B):" -ForegroundColor Cyan
+    Write-Host "    $standalonePath" -ForegroundColor White
     Write-Host "  ============================================================" -ForegroundColor Green
+    Write-Log -Message "Node B setup complete. WSL window opened. HEAD=$TailscaleIP"
 }
 
+# ---------------------------------------------------------------------------
+# DONE
+# ---------------------------------------------------------------------------
 Write-Host ""
 Write-Host "  Done. Keep the WSL terminal window open." -ForegroundColor Cyan
+Write-Host "  Log file: $LOG_FILE" -ForegroundColor Gray
 Write-Host ""

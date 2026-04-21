@@ -1,104 +1,119 @@
 """
-verify_cluster.py  —  run on Node A after both nodes are connected.
+verify_cluster.py -- run on Node A after both nodes are connected.
 
-Reads cluster state from /tmp/ray_cluster_state.json written by the
-nodea_start.sh monitor every 30 seconds. This script NEVER connects to
-Ray — eliminating the driver-GC cascade that was dropping Node B every
-time this script ran.
+Connects directly to the running Ray cluster and verifies:
+  - At least 2 alive nodes
+  - GPU registered (from Node B)
+  - Prints resource summary and VRAM budget
 
 Usage:
     python verify_cluster.py
+    python verify_cluster.py --address 100.x.x.x:6379
 """
-import json
+import argparse
 import os
 import sys
-import time
 
-STATE_FILE = "/tmp/ray_cluster_state.json"
-MAX_AGE_S  = 120  # accept state files up to 120s old (monitor writes every 30s)
+os.environ.setdefault("RAY_DISABLE_JEMALLOC", "1")
+os.environ.setdefault("LD_PRELOAD", "")
 
+import ray
 
-def _load_state() -> dict:
-    if not os.path.exists(STATE_FILE):
-        print("FAIL: State file not found.")
-        print(f"  Expected: {STATE_FILE}")
-        print("  Is nodea_start.sh running? Wait for one monitor cycle (30s) then retry.")
-        sys.exit(1)
+# ---------------------------------------------------------------------------
+# Args
+# ---------------------------------------------------------------------------
+parser = argparse.ArgumentParser()
+parser.add_argument("--address", default="auto", help="Ray head address (default: auto)")
+args = parser.parse_args()
 
-    try:
-        with open(STATE_FILE) as f:
-            state = json.load(f)
-    except Exception as e:
-        print(f"FAIL: Could not read state file: {e}")
-        sys.exit(1)
-
-    age = time.time() - state.get("ts", 0)
-    if age > MAX_AGE_S:
-        print(f"FAIL: State file is {age:.0f}s old (max {MAX_AGE_S}s).")
-        print("  nodea_start.sh monitor may have stopped.")
-        sys.exit(1)
-
-    return state
-
-
-# ── Load state ──────────────────────────────────────────────────────────
-state = _load_state()
-age   = time.time() - state["ts"]
-
-alive    = state.get("alive", [])       # list of {ip, cpu, gpu}
-dead_ips = state.get("dead_ips", [])
-cr       = state.get("cr", {})
-cr_keys  = state.get("cr_keys", [])
-
-# ── Print cluster state ─────────────────────────────────────────────────
+# ---------------------------------------------------------------------------
+# Connect
+# ---------------------------------------------------------------------------
 print("=" * 60)
-print(f"RAY CLUSTER STATE  (snapshot age: {age:.0f}s)")
+print("RAY CLUSTER VERIFICATION")
 print("=" * 60)
-print(f"Total nodes (incl. stale): {len(alive) + len(dead_ips)}")
-print(f"  Alive : {len(alive)}")
-print(f"  Dead  : {len(dead_ips)}  (stale entries — ignore)")
+print(f"  Connecting to Ray ({args.address})...")
+
+try:
+    ray.init(address=args.address, ignore_reinit_error=True, logging_level="ERROR")
+except Exception as e:
+    print(f"\nFAIL: Could not connect to Ray: {e}")
+    print("\nSuggested fixes:")
+    print("  1. Ensure nodeA.sh WSL window is open and shows Ray:UP")
+    print("  2. Run with explicit address: python verify_cluster.py --address 100.x.x.x:6379")
+    sys.exit(1)
+
+# ---------------------------------------------------------------------------
+# Node status
+# ---------------------------------------------------------------------------
+try:
+    all_nodes = ray.nodes()
+except Exception as e:
+    print(f"\nFAIL: Could not query nodes: {e}")
+    sys.exit(1)
+
+alive    = [n for n in all_nodes if n.get("Alive")]
+dead     = [n for n in all_nodes if not n.get("Alive")]
+cr       = dict(ray.cluster_resources())
+
+print(f"  Connected OK.\n")
+print(f"  Total nodes  : {len(all_nodes)}")
+print(f"  Alive        : {len(alive)}")
+print(f"  Dead (stale) : {len(dead)}")
+print()
 
 for n in alive:
-    print(f"  [ALIVE] {n['ip']}  CPU={n['cpu']}  GPU={n['gpu']}")
-for ip in dead_ips:
-    print(f"  [DEAD ] {ip}")
+    ip  = n.get("NodeManagerAddress", "?")
+    res = n.get("Resources", {})
+    cpu = res.get("CPU", 0)
+    gpu = res.get("GPU", 0)
+    print(f"  [ALIVE] {ip}  CPU={cpu}  GPU={gpu}")
+
+for n in dead:
+    ip = n.get("NodeManagerAddress", "?")
+    print(f"  [DEAD]  {ip}  (stale entry -- ignore)")
 
 print()
-print("Cluster resources:", cr)
-print()
 
-# ── Check 2 alive nodes ─────────────────────────────────────────────────
+# ---------------------------------------------------------------------------
+# Check: at least 2 alive nodes
+# ---------------------------------------------------------------------------
 if len(alive) < 2:
-    print(f"FAIL: Only {len(alive)} alive node(s) in latest snapshot.")
+    print(f"FAIL: Only {len(alive)} alive node(s). Need at least 2.")
     print()
-    print("If Node B just connected, wait 30s for the next monitor cycle then re-run.")
-    print("Node B connection command:")
+    print("If Node B just connected, wait 30s then re-run.")
+    print("Node B manual join command (run in Node B WSL):")
     print("  export LD_PRELOAD=''")
     print("  export RAY_DISABLE_JEMALLOC=1")
     print("  export CUDA_VISIBLE_DEVICES=0")
     print("  ray start --address=<TAILSCALE_IP>:6379 --num-gpus=1 --num-cpus=4")
+    ray.shutdown()
     sys.exit(1)
 
-print("Both nodes alive!")
-print()
-
-# ── Check GPU ───────────────────────────────────────────────────────────
+# ---------------------------------------------------------------------------
+# Check: GPU registered
+# ---------------------------------------------------------------------------
 gpu_total = cr.get("GPU", 0)
 if gpu_total == 0:
     print("FAIL: No GPU in cluster resources.")
     print("Node B must reconnect with --num-gpus=1")
+    ray.shutdown()
     sys.exit(1)
 
-print(f"GPU resource registered: {gpu_total} GPU(s)\n")
+print(f"  GPU resource registered: {gpu_total} GPU(s)")
 
-# ── GPU model from accelerator_type key ────────────────────────────────
+# ---------------------------------------------------------------------------
+# GPU model from accelerator_type resource key
+# ---------------------------------------------------------------------------
 gpu_name = "Unknown"
-for key in cr_keys:
+for key in cr.keys():
     if key.startswith("accelerator_type:"):
         gpu_name = key.split("accelerator_type:", 1)[1]
         break
 
-# ── VRAM budget ─────────────────────────────────────────────────────────
+# ---------------------------------------------------------------------------
+# VRAM budget
+# ---------------------------------------------------------------------------
 KNOWN_VRAM = {
     "T1000": 4096, "T400": 4096, "T600": 4096,
     "RTX 3060": 12288, "RTX 3070": 8192,
@@ -108,21 +123,26 @@ vram     = next((v for k, v in KNOWN_VRAM.items() if k in gpu_name), 4096)
 budget   = 3 * 340 + 2100 + 400 + 120
 headroom = vram - budget
 
-node_b = next((n for n in alive if n["gpu"] > 0), None)
-node_b_ip = node_b["ip"] if node_b else "?"
+node_b    = next((n for n in alive if n.get("Resources", {}).get("GPU", 0) > 0), None)
+node_b_ip = node_b.get("NodeManagerAddress", "?") if node_b else "?"
 
-# ── Print success ───────────────────────────────────────────────────────
+# ---------------------------------------------------------------------------
+# Success
+# ---------------------------------------------------------------------------
+print()
 print("=" * 60)
-print("SUCCESS — CLUSTER FULLY VERIFIED")
+print("SUCCESS -- CLUSTER FULLY VERIFIED")
 print("=" * 60)
-print(f"  Node B IP : {node_b_ip}")
-print(f"  GPU model : {gpu_name}")
-print(f"  VRAM      : {vram} MB")
-print(f"  Budget    : {budget} MB  (3×FinBERT + Phi-3-mini shared + overhead)")
-print(f"  Headroom  : {headroom} MB  ({'OK' if headroom >= 0 else 'TIGHT'})")
+print(f"  Node B IP  : {node_b_ip}")
+print(f"  GPU model  : {gpu_name}")
+print(f"  VRAM       : {vram} MB")
+print(f"  Budget     : {budget} MB  (3xFinBERT + Phi-3-mini shared + overhead)")
+print(f"  Headroom   : {headroom} MB  ({'OK' if headroom >= 0 else 'TIGHT'})")
 print("=" * 60)
 print()
 print("Next steps:")
 print("  1) Node B: python evaluation/vram_verify.py")
 print("  2) Node A: python run_pipeline.py --ticker AAPL --filing 8-K --output results/aapl.json")
 print("  3) Node A: python -m evaluation.latency_benchmark --tickers AAPL MSFT GOOGL")
+
+ray.shutdown()

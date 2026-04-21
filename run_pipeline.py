@@ -16,7 +16,31 @@ def main():
     args = ap.parse_args()
 
     os.makedirs(os.path.dirname(args.output) or ".", exist_ok=True)
-    ray.init(address=args.address)
+
+    # Ray's raylet splits paths on spaces when launching workers, so we symlink
+    # the project (which lives under OneDrive with spaces) to a clean path first.
+    _here = os.path.dirname(os.path.abspath(__file__))
+    _symlink = "/tmp/maor_equity"
+    try:
+        if os.path.islink(_symlink):
+            os.unlink(_symlink)
+        os.symlink(_here, _symlink)
+        _working_dir = _symlink
+    except OSError:
+        _working_dir = _here   # fallback if symlink fails
+
+    ray.init(
+        address=args.address,
+        runtime_env={
+            "working_dir": _working_dir,
+            "excludes": [
+                "venv/", "data/", "results/", "logs/",
+                ".git/", "__pycache__/", "*.log", "*.json",
+                "edgar-crawler/", "FinRobot/", "TradingAgents/",
+                "sec-edgar-downloader/",
+            ],
+        },
+    )
     print(f"Cluster: {ray.cluster_resources()}")
 
     from agents.orchestrator import run_pipeline
@@ -35,7 +59,7 @@ def main():
     print(f"  Recommendation : {gr['recommendation']}")
     print(f"  Confidence     : {gr['confidence']}")
     print(f"  Total time     : {result['timings']['total']:.2f}s")
-    print(f"  Chunks         : {result['n_chunks']}")
+    print(f"  Chunks         : {result.get('n_chunks_filtered', result.get('n_chunks', '?'))}")
     print(f"\n  Summary excerpt:\n  {result['summary']['summary'][:280]}...")
     print(f"\n  Saved → {args.output}")
 
