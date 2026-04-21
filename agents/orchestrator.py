@@ -6,7 +6,6 @@ Run:  python agents/orchestrator.py
 import time
 import ray
 import numpy as np
-from ray.util.scheduling_strategies import NodeAffinitySchedulingStrategy
 
 from agents.ingestion_agent      import IngestionAgent
 from agents.sentiment_agent      import FinBERTBundle, DimensionRouter, aggregate_sentiment_vector
@@ -16,45 +15,33 @@ from agents.guardrail_agent      import GuardrailAgent, Phi3ModelActor
 from optimization.chunk_filter   import ChunkFilter
 
 
-def _gpu_node_strategy() -> object:
-    """Return a soft NodeAffinity for the GPU node (Node B).
-
-    Node A's venv Python lives on a path with spaces, which breaks Ray's
-    worker-spawn bash command. Pinning all actors — including CPU ones — to
-    Node B avoids that broken raylet entirely. soft=True lets Ray fall back
-    to any node if Node B is unavailable.
-    """
-    for n in ray.nodes():
-        if n.get("Alive") and n.get("Resources", {}).get("GPU", 0) > 0:
-            return NodeAffinitySchedulingStrategy(node_id=n["NodeID"], soft=True)
-    return "DEFAULT"
-
-
 def run_pipeline(ticker: str, filing_type: str = "8-K") -> dict:
     """Full distributed pipeline. Returns result dict."""
     t0_total = time.perf_counter()
     timings  = {}
 
-    gpu_node = _gpu_node_strategy()
-
     # Phi-3-mini loaded ONCE, shared by summarizer and guardrail (VRAM fix)
     phi3        = Phi3ModelActor.remote()
 
-    # CPU actors pinned to Node B so they use Node B's working Python binary.
-    ingestion   = IngestionAgent.options(scheduling_strategy=gpu_node).remote()
-    tech        = TechnicalAnalysisAgent.options(scheduling_strategy=gpu_node).remote()
-    finbert     = FinBERTBundle.remote()        # single actor, 3 dimensions
+    # GPU actors on Node B
+    finbert     = FinBERTBundle.remote()
     summarizer  = SummarizationAgent.remote(phi3)
     guardrail   = GuardrailAgent.remote(phi3)
-    router      = DimensionRouter()
-    chunk_filter = ChunkFilter()          # CPU-only, Node A
 
-    # ── Stage 1: Ingestion (Node A) ──────────────────────────────────
+    # I/O-bound agents run locally on Node A: sec_edgar_downloader and yfinance
+    # are only installed on Node A. These complete in seconds; FinBERT/Phi-3-mini
+    # dominate latency, so local execution does not hurt end-to-end time.
+    ingestion    = IngestionAgent()
+    tech_agent   = TechnicalAnalysisAgent()
+    router       = DimensionRouter()
+    chunk_filter = ChunkFilter()
+
+    # ── Stage 1: Ingestion (Node A, local) ───────────────────────────
     t0 = time.perf_counter()
-    filing = ray.get(ingestion.fetch_filing.remote(ticker, filing_type))
+    filing = ingestion.fetch_filing(ticker, filing_type)
     if "error" in filing:
         return {"error": filing["error"]}
-    chunks_raw = ray.get(ingestion.chunk_document.remote(filing["text"]))
+    chunks_raw = ingestion.chunk_document(filing["text"])
     timings["ingestion"] = time.perf_counter() - t0
 
     # ── Stage 1b: Chunk filtering (Node A, CPU) ──────────────────────
@@ -98,9 +85,12 @@ def run_pipeline(ticker: str, filing_type: str = "8-K") -> dict:
     # same-GPU concurrency between FinBERT and Phi-3-mini.
 
     # Phase A: FinBERT on Node B GPU  ‖  Technical analysis on Node A CPU
+    # tech_agent.compute_indicators() is an I/O-bound yfinance call (~1-2 s).
+    # Submitting the Ray remote first lets it start on Node B while we compute
+    # technical indicators locally; both finish before we call ray.get().
     r_bundle = finbert.classify_all.remote(ref_mkt_payload, ref_reg_payload,
                                            ref_tmp_payload)
-    r_tech   = tech.compute_indicators.remote(ticker)
+    tech_r   = tech_agent.compute_indicators(ticker)   # local, completes fast
 
     mkt_r, reg_r, tmp_r = ray.get(r_bundle)          # wait for FinBERT
     ray.get(finbert.flush_gpu_cache.remote())          # release cached allocs
@@ -110,7 +100,6 @@ def run_pipeline(ticker: str, filing_type: str = "8-K") -> dict:
     t_deserialize = time.perf_counter()
     r_sum  = summarizer.process_document.remote(chunks, f"{ticker}_{filing_type}")
     sum_r  = ray.get(r_sum)
-    tech_r = ray.get(r_tech)                           # likely already done
     timings["t_deserialize_ms"] = (time.perf_counter() - t_deserialize) * 1000
 
     timings["t_comm_total_ms"] = (
