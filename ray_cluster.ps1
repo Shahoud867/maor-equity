@@ -1,4 +1,4 @@
-<#
+﻿<#
 .SYNOPSIS
     Ray Cluster Setup using Tailscale VPN.
     Tailscale gives both WSL2 instances stable 100.x.x.x IPs with direct
@@ -446,7 +446,7 @@ sudo ip addr add "${TS_IP}/32" dev lo 2>/dev/null || true
 
 # -- Step 2: Aggressive cleanup --------------------------------------------
 log_msg "[2/4] Stopping all Ray processes..."
-"$MAOR_PY" -m ray stop --force 2>/dev/null || true
+"$MAOR_PY" "$VENV_REAL/bin/ray" stop --force 2>/dev/null || true
 sleep 1
 pkill -9 -f gcs_server  2>/dev/null || true
 pkill -9 -f raylet       2>/dev/null || true
@@ -486,7 +486,7 @@ log_msg "[3/4] Starting Ray head on $TS_IP:$RAY_PORT..."
 echo ""
 echo "  Starting Ray head node..."
 
-"$MAOR_PY" -m ray start \
+"$MAOR_PY" "$VENV_REAL/bin/ray" start \
     --head \
     --port="$RAY_PORT" \
     --include-dashboard=false \
@@ -844,7 +844,7 @@ fi
 
 # -- Step 2: Cleanup -------------------------------------------------------
 log_msg "[2/3] Stopping existing Ray processes..."
-"$MAOR_PY" -m ray stop --force 2>/dev/null || true
+"$MAOR_PY" "$VENV_REAL/bin/ray" stop --force 2>/dev/null || true
 sleep 1
 pkill -9 -f raylet       2>/dev/null || true
 pkill -9 -f plasma_store 2>/dev/null || true
@@ -854,9 +854,9 @@ log_msg "Cleanup done."
 
 # -- connect_worker: stop stale Ray then join the head --------------------
 connect_worker() {
-    "$MAOR_PY" -m ray stop --force 2>/dev/null || true
+    "$MAOR_PY" "$VENV_REAL/bin/ray" stop --force 2>/dev/null || true
     sleep 2
-    "$MAOR_PY" -m ray start \
+    "$MAOR_PY" "$VENV_REAL/bin/ray" start \
         --address="$HEAD_IP:$RAY_PORT" \
         --num-gpus=1 \
         --num-cpus=4 \
