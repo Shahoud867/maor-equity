@@ -185,7 +185,7 @@ def run_serial(ticker: str, filing_type: str = "8-K") -> dict:
 if __name__ == "__main__":
     import os
     os.makedirs("logs", exist_ok=True)
-    tickers = ["AAPL", "MSFT", "GOOGL"]
+    tickers = ["AAPL", "MSFT"]
     results = []
     for tk in tickers:
         print(f"\n{'='*50}\nSerial pipeline → {tk}\n{'='*50}")
