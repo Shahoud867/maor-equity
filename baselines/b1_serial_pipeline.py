@@ -14,7 +14,8 @@ Run on Node B BEFORE starting Ray cluster (models compete for VRAM otherwise).
 import gc, json, re, statistics, time
 from pathlib import Path
 
-MAX_CHUNKS = 25   # cap matches what distributed pipeline sees after filtering
+MAX_CHUNKS_8K  = 12   # matches ChunkFilter.max_chunks_8k
+MAX_CHUNKS_10K = 20   # matches ChunkFilter.max_chunks_10k
 
 
 def _chunk_text(text: str, chunk_size: int = 512, stride: int = 64) -> list:
@@ -34,7 +35,7 @@ def _chunk_text(text: str, chunk_size: int = 512, stride: int = 64) -> list:
     return chunks
 
 
-def _filter_chunks(chunks: list, cap: int = MAX_CHUNKS) -> list:
+def _filter_chunks(chunks: list, cap: int = MAX_CHUNKS_8K) -> list:
     """TF-IDF dedup then hard cap — matches ChunkFilter + pipeline behaviour."""
     try:
         from sklearn.feature_extraction.text import TfidfVectorizer
@@ -58,6 +59,7 @@ def _filter_chunks(chunks: list, cap: int = MAX_CHUNKS) -> list:
 
 
 def run_serial(ticker: str, filing_type: str = "8-K") -> dict:
+    cap = MAX_CHUNKS_8K if filing_type == "8-K" else MAX_CHUNKS_10K
     import torch
     from transformers import pipeline, AutoTokenizer, AutoModelForCausalLM, BitsAndBytesConfig
     import yfinance as yf
@@ -82,11 +84,11 @@ def run_serial(ticker: str, filing_type: str = "8-K") -> dict:
     print(f"  [{ticker}] chunking + filtering...")
     t          = time.time()
     chunks_raw = _chunk_text(text)
-    chunks     = _filter_chunks(chunks_raw, cap=MAX_CHUNKS)
+    chunks     = _filter_chunks(chunks_raw, cap=cap)
     timings["chunk_filter_ms"] = (time.time() - t) * 1000
     timings["n_chunks_before"] = len(chunks_raw)
     timings["n_chunks_after"]  = len(chunks)
-    print(f"  [{ticker}] chunks: {len(chunks_raw)} → {len(chunks)} (capped at {MAX_CHUNKS})")
+    print(f"  [{ticker}] chunks: {len(chunks_raw)} → {len(chunks)} (capped at {cap})")
 
     # ── Stage 2: FinBERT — all chunks, sequential ─────────────────────
     print(f"  [{ticker}] stage 2: FinBERT sentiment ({len(chunks)} chunks)...")
