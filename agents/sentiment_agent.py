@@ -7,7 +7,7 @@ import ray
 import numpy as np
 
 
-@ray.remote(num_gpus=0.35)
+@ray.remote(num_gpus=0.35, max_restarts=3, max_task_retries=2)
 class FinBERTBundle:
     """
     Single actor holding all 3 FinBERT classifiers.
@@ -18,26 +18,46 @@ class FinBERTBundle:
       (same checkpoint → ~220 MB saved vs loading it twice)
     - T1000 runs GPU ops sequentially anyway; 3 actors just added
       process-spawn overhead with no real parallelism gain
+
+    Quantization:
+    - 4-bit NF4 via BitsAndBytesConfig reduces each checkpoint from
+      ~220 MB (FP16) to ~55 MB — saves ~330 MB total across both checkpoints.
+    - Frees headroom for Phi-3-mini KV cache during Phase B.
+    - Fault tolerance: max_restarts=3 so OOM-killed actors auto-recover.
     """
 
     def __init__(self, min_confidence: float = 0.60):
         import torch
-        from transformers import pipeline
+        from transformers import (pipeline, AutoTokenizer,
+                                  AutoModelForSequenceClassification,
+                                  BitsAndBytesConfig)
         self._min_conf = min_confidence
 
+        bnb = BitsAndBytesConfig(
+            load_in_4bit=True,
+            bnb_4bit_quant_type="nf4",
+            bnb_4bit_use_double_quant=True,
+            bnb_4bit_compute_dtype=torch.float16,
+        )
+
+        def _make_pipe(model_name: str) -> object:
+            """Load a classification model with 4-bit NF4 quantization."""
+            tok = AutoTokenizer.from_pretrained(model_name)
+            mdl = AutoModelForSequenceClassification.from_pretrained(
+                model_name, quantization_config=bnb, device_map={"": 0}
+            )
+            return pipeline(
+                "text-classification", model=mdl, tokenizer=tok,
+                top_k=None,
+            )
+
         # ProsusAI/finbert covers market sentiment AND temporal framing
-        self._pipe_mkt = pipeline(
-            "text-classification", model="ProsusAI/finbert",
-            device=0, top_k=None, torch_dtype=torch.float16,
-        )
+        self._pipe_mkt = _make_pipe("ProsusAI/finbert")
         # finbert-tone covers regulatory/compliance tone
-        self._pipe_reg = pipeline(
-            "text-classification", model="yiyanghkust/finbert-tone",
-            device=0, top_k=None, torch_dtype=torch.float16,
-        )
+        self._pipe_reg = _make_pipe("yiyanghkust/finbert-tone")
         # Temporal dimension reuses the same pipeline object — no extra VRAM
         self._pipe_tmp = self._pipe_mkt
-        print("[FinBERTBundle] 2 checkpoints loaded for 3 dimensions (market+temporal shared)")
+        print("[FinBERTBundle] 2 checkpoints loaded (4-bit NF4), 3 dimensions (market+temporal shared)")
 
     def classify_all(self, market_texts: list, reg_texts: list,
                      tmp_texts: list) -> tuple:

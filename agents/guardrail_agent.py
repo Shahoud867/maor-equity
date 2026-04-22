@@ -11,7 +11,7 @@ import ray
 import numpy as np
 
 
-@ray.remote(num_gpus=0.2)
+@ray.remote(num_gpus=0.2, max_restarts=3, max_task_retries=2)
 class Phi3ModelActor:
     """Singleton model actor — loaded once, shared by Summarizer and Guardrail."""
 
@@ -49,7 +49,7 @@ class Phi3ModelActor:
         return self.tok.decode(out[0][inp["input_ids"].shape[1]:], skip_special_tokens=True)
 
 
-@ray.remote(num_gpus=0.02)  # tiny fraction forces Node B placement (near shared model)
+@ray.remote(num_gpus=0.02, max_restarts=3, max_task_retries=2)
 class GuardrailAgent:
 
     def __init__(self, phi3_actor):
