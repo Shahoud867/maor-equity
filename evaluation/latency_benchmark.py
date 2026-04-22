@@ -41,6 +41,10 @@ def run_distributed(tickers: list) -> list:
             "t_serialize_ms": timings.get("t_serialize_ms"),
             "t_transfer_ms": timings.get("t_transfer_ms"),
             "t_deserialize_ms": timings.get("t_deserialize_ms"),
+            "t_decode_ms": timings.get("t_decode_ms"),           # 5th Tcomm component
+            "payload_raw_bytes": timings.get("payload_raw_bytes"),
+            "payload_compressed_bytes": timings.get("payload_compressed_bytes"),
+            "bandwidth_reduction_pct": timings.get("bandwidth_reduction_pct"),
         }
         results.append(r)
         print(f"  → {r['total_s']:.2f}s  "
@@ -86,7 +90,7 @@ def compute_stats(distributed: list, serial: list) -> dict:
     avg_comm = {}
     if comm_results:
         for key in ["t_encode_ms", "t_serialize_ms", "t_transfer_ms",
-                    "t_deserialize_ms", "t_comm_total_ms"]:
+                    "t_deserialize_ms", "t_decode_ms", "t_comm_total_ms"]:
             avg_comm[key] = statistics.mean(r[key] for r in comm_results if r.get(key))
 
     # Chunk filtering stats
