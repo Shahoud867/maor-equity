@@ -90,18 +90,23 @@ def run_serial(ticker: str, filing_type: str = "8-K") -> dict:
     timings["n_chunks_after"]  = len(chunks)
     print(f"  [{ticker}] chunks: {len(chunks_raw)} → {len(chunks)} (capped at {cap})")
 
-    # ── Stage 2: FinBERT — all chunks, sequential ─────────────────────
-    print(f"  [{ticker}] stage 2: FinBERT sentiment ({len(chunks)} chunks)...")
-    t       = time.time()
-    finbert = pipeline("text-classification", model="ProsusAI/finbert",
-                       device=0, top_k=None, torch_dtype=torch.float16)
-    texts   = [c["text"] for c in chunks]
-    finbert(texts,        batch_size=8, truncation=True, max_length=512)
-    finbert(texts[:3],    batch_size=8, truncation=True, max_length=512)
-    finbert(texts[:3],    batch_size=8, truncation=True, max_length=512)
-    del finbert
-    gc.collect()
-    torch.cuda.empty_cache()
+    # ── Stage 2: FinBERT 3-D — all chunks, sequential ────────────────
+    # Matches FinBERTBundle exactly: 2 checkpoints for 3 dimensions
+    # (ProsusAI/finbert for market+temporal, finbert-tone for regulatory)
+    print(f"  [{ticker}] stage 2: FinBERT 3-D sentiment ({len(chunks)} chunks)...")
+    t        = time.time()
+    chunk_texts = [c["text"] for c in chunks]
+    pipe_mkt = pipeline("text-classification", model="ProsusAI/finbert",
+                        device=0, top_k=None, torch_dtype=torch.float16)
+    pipe_mkt(chunk_texts, batch_size=8, truncation=True, max_length=512)  # market
+    pipe_mkt(chunk_texts, batch_size=8, truncation=True, max_length=512)  # temporal (same model)
+    del pipe_mkt; gc.collect(); torch.cuda.empty_cache()
+
+    pipe_reg = pipeline("text-classification", model="yiyanghkust/finbert-tone",
+                        device=0, top_k=None, torch_dtype=torch.float16)
+    pipe_reg(chunk_texts[:3], batch_size=8, truncation=True, max_length=512)  # regulatory
+    del pipe_reg; gc.collect(); torch.cuda.empty_cache()
+
     timings["sentiment"] = time.time() - t
     print(f"  [{ticker}] sentiment done ({timings['sentiment']:.1f}s)")
 

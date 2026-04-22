@@ -36,25 +36,24 @@ def load_financial_phrasebank(n_samples: int) -> list:
 
 
 def run_3d_sentiment(texts: list) -> list:
-    """Run our 3-D FinBERT pipeline. Returns list of (market, regulatory, temporal) vectors."""
-    from agents.sentiment_agent import FinBERTActor, DimensionRouter, aggregate_sentiment_vector
+    """Run our 3-D FinBERT pipeline. Returns list of directional results per text."""
+    from agents.sentiment_agent import FinBERTBundle, DimensionRouter, aggregate_sentiment_vector
 
-    sent_mkt = FinBERTActor.remote("ProsusAI/finbert", "market")
-    sent_reg = FinBERTActor.remote("yiyanghkust/finbert-tone", "regulatory")
-    sent_tmp = FinBERTActor.remote("ProsusAI/finbert", "temporal")
-    router   = DimensionRouter()
+    bundle = FinBERTBundle.remote()
+    router = DimensionRouter()
 
     results = []
     for text in texts:
         chunks = [{"chunk_id": 0, "text": text}]
         routed = router.route(chunks)
-        mkt_r, reg_r, tmp_r = ray.get([
-            sent_mkt.classify_batch.remote(routed["market"]),
-            sent_reg.classify_batch.remote(routed["regulatory"]),
-            sent_tmp.classify_batch.remote(routed["temporal"]),
-        ])
+        mkt_r, reg_r, tmp_r = ray.get(
+            bundle.classify_all.remote(
+                routed["market"],
+                routed["regulatory"],
+                routed["temporal"],
+            )
+        )
         sv = aggregate_sentiment_vector(mkt_r, reg_r, tmp_r)
-        # Directional call from 3-D: use market dimension positive vs negative
         market_pos, market_neg = sv[0, 0], sv[0, 2]
         direction_3d = "positive" if market_pos > market_neg else (
             "negative" if market_neg > market_pos else "neutral"

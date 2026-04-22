@@ -66,17 +66,17 @@ Traditional equity research requires analysts to synthesise earnings call transc
 ║  │   Dashboard       :8265          │◄───╫──TCP───╫─►│       Connected to head                │  ║
 ║  └──────────────────────────────────┘    ║        ║  └────────────────────────────────────────┘  ║
 ║                                          ║        ║                                              ║
-║  ┌──────────────────┐                    ║        ║  ┌─────────────────┐  ┌──────────────────┐   ║
-║  │  IngestionAgent  │  SEC EDGAR         ║        ║  │ FinBERTActor    │  │ FinBERTActor     │   ║
-║  │  (CPU, 1 core)   │  scraping          ║        ║  │ "market"        │  │ "regulatory"     │   ║
-║  └──────────────────┘                    ║        ║  │ 0.3 GPU         │  │ 0.3 GPU          │   ║
-║                                          ║        ║  └─────────────────┘  └──────────────────┘   ║
+║  ┌──────────────────┐                    ║        ║  ┌────────────────────────────────────────┐  ║
+║  │  IngestionAgent  │  SEC EDGAR         ║        ║  │  FinBERTBundle  (single actor, 0.35 GPU)│  ║
+║  │  (CPU, 1 core)   │  scraping          ║        ║  │  market  : ProsusAI/finbert            │  ║
+║  └──────────────────┘                    ║        ║  │  regulatory: yiyanghkust/finbert-tone  │  ║
+║                                          ║        ║  │  temporal  : ProsusAI/finbert (shared) │  ║
+║  ┌──────────────────┐                    ║        ║  │  Bundled to save 2 CUDA contexts ~200MB│  ║
+║  │  TechnicalAgent  │  RSI, MACD,        ║        ║  └────────────────────────────────────────┘  ║
+║  │  (CPU, 1 core)   │  Bollinger, VWAP   ║        ║                                              ║
+║  └──────────────────┘                    ║        ║  ── Phase A: FinBERTBundle ‖ TechnicalAgent ──║
+║              ║ parallel (Phase A)        ║        ║  ── Phase B: Phi3ModelActor (after flush) ────║
 ║  ┌──────────────────┐                    ║        ║                                              ║
-║  │  TechnicalAgent  │  RSI, MACD,        ║        ║  ┌─────────────────┐                         ║
-║  │  (CPU, 1 core)   │  Bollinger, VWAP   ║        ║  │ FinBERTActor    │  (3 actors share        ║
-║  └──────────────────┘                    ║        ║  │ "temporal"      │   one GPU via           ║
-║                                          ║        ║  │ 0.3 GPU         │   Ray fractional        ║
-║  ┌──────────────────┐                    ║        ║  └─────────────────┘   allocation)           ║
 ║  │  Orchestrator    │  DAG scheduling,   ║        ║                                              ║
 ║  │  ChunkFilter     │  Tcomm profiling   ║        ║  ┌──────────────────────────────────────┐    ║
 ║  │  DimensionRouter │  (all CPU)         ║        ║  │       Phi3ModelActor  (SHARED)        │    ║
@@ -328,7 +328,7 @@ Week 4:  Run all 3 evaluation scripts → compile results → write Node A secti
 | Component | File | What it does |
 |---|---|---|
 | Phi3ModelActor | `agents/guardrail_agent.py` | Loads Phi-3-mini ONCE, shared by summarizer + guardrail |
-| FinBERTActor ×3 | `agents/sentiment_agent.py` | Market / Regulatory / Temporal classifiers |
+| FinBERTBundle | `agents/sentiment_agent.py` | Single actor: Market + Regulatory + Temporal (2 checkpoints, 1 CUDA context) |
 | SummarizationAgent | `agents/summarization_agent.py` | Receives filtered chunks, runs map-reduce via shared Phi-3 |
 | GuardrailAgent | `agents/guardrail_agent.py` | Bull + Bear prompts via shared Phi-3, rule-based arbiter |
 | VRAM verification | `evaluation/vram_verify.py` | Confirms peak < 4096 MB during full pipeline |
@@ -458,17 +458,21 @@ See [Section 10](#10-guardrail-protocol) for full detail.
 
 ## 6. Agent Reference
 
-### FinBERTActor (Node B)
+### FinBERTBundle (Node B)
 ```
-@ray.remote(num_gpus=0.3)
-Checkpoints:
-  market:     ProsusAI/finbert
-  regulatory: yiyanghkust/finbert-tone
-  temporal:   ProsusAI/finbert  (separate actor instance)
+@ray.remote(num_gpus=0.35)
+Single bundled actor — 3 dimensions, 2 checkpoints, 1 CUDA context:
+  market:     ProsusAI/finbert        (float16)
+  regulatory: yiyanghkust/finbert-tone (float16)
+  temporal:   ProsusAI/finbert        (shared with market — no extra VRAM)
 
-Input:  list of text strings
-Output: {"dimension": str, "scores": [{"positive": f, "neutral": f, "negative": f}, ...],
-          "n_texts": int, "n_ambiguous": int}
+Why bundled (not 3 separate actors):
+  - Saves 2 CUDA contexts (~200 MB on T1000)
+  - ProsusAI/finbert loaded once for market+temporal (~220 MB saved)
+  - T1000 serialises GPU ops anyway; 3 actors add overhead with no gain
+
+Input:  (market_texts, regulatory_texts, temporal_texts)
+Output: tuple of 3 dicts: {"dimension": str, "scores": [...], "n_texts": int, "n_ambiguous": int}
 
 Confidence threshold: 0.60 — scores below this marked "ambiguous"
 Batch size: 8, max_length: 512 tokens, truncation: True
@@ -638,19 +642,24 @@ Node B has exactly **4,096 MB** VRAM. Every component must fit simultaneously.
 ╠══════════════════════════════╦═════════════╦════════════╣
 ║  Component                   ║  VRAM (MB)  ║  Note      ║
 ╠══════════════════════════════╬═════════════╬════════════╣
-║  FinBERTActor "market"       ║    ~340     ║  4-bit NF4 ║
-║  FinBERTActor "regulatory"   ║    ~340     ║  4-bit NF4 ║
-║  FinBERTActor "temporal"     ║    ~340     ║  4-bit NF4 ║
+║  FinBERTBundle (1 actor)     ║    ~525     ║  float16   ║
+║  - ProsusAI/finbert          ║             ║  market +  ║
+║  - yiyanghkust/finbert-tone  ║             ║  temporal  ║
+║  - (2 checkpoints, 1 ctx)    ║             ║  shared    ║
 ╠══════════════════════════════╬═════════════╬════════════╣
-║  Phi3ModelActor (SHARED)     ║   ~2,100    ║  4-bit NF4 ║
+║  Phi3ModelActor (SHARED)     ║   ~2,736    ║  4-bit NF4 ║
 ║  (used by Summarizer         ║             ║  loaded    ║
 ║   AND Guardrail)             ║             ║  ONCE      ║
 ╠══════════════════════════════╬═════════════╬════════════╣
-║  KV cache + inference bufs   ║    ~400     ║  batch=1   ║
+║  KV cache + inference bufs   ║    ~600     ║  batch=1   ║
 ║  Ray actor overhead          ║    ~120     ║            ║
 ╠══════════════════════════════╬═════════════╬════════════╣
-║  PEAK TOTAL                  ║  ~3,640     ║  < 4,096 ✓ ║
-║  Headroom                    ║    ~456     ║            ║
+║  NOTE: FinBERT runs Phase A, ║             ║            ║
+║  flushed before Phi-3 Phase B║             ║            ║
+║  — never in VRAM together    ║             ║            ║
+╠══════════════════════════════╬═════════════╬════════════╣
+║  PEAK TOTAL (Phase B)        ║  ~3,456     ║  < 4,096 ✓ ║
+║  Headroom                    ║    ~640     ║  (measured)║
 ╚══════════════════════════════╩═════════════╩════════════╝
 
 CRITICAL NOTE: If Phi-3-mini is loaded TWICE (once for summarizer,
@@ -704,10 +713,10 @@ Step 2 — Rule-based Risk Arbiter (deterministic, NO LLM call):
   diff = |bull_score - bear_score|
 
   ┌──────────────────────────────────────────────────────────────────┐
-  │  diff > 0.40  →  winning side  +  confidence: HIGH              │
-  │  0.25 < diff ≤ 0.40  →  winning side  +  confidence: MEDIUM     │
-  │  diff ≤ 0.25  →  UNRESOLVED  +  confidence: LOW                 │
-  │                  (no directional recommendation issued)          │
+  │  diff > 0.30  →  winning side  +  confidence: HIGH              │
+  │  0.20 < diff ≤ 0.30  →  winning side  +  confidence: MEDIUM     │
+  │  0.10 < diff ≤ 0.20  →  winning side  +  confidence: LOW        │
+  │  diff ≤ 0.10  →  UNRESOLVED  (no directional recommendation)    │
   └──────────────────────────────────────────────────────────────────┘
 
 Output:
