@@ -89,10 +89,10 @@ class GuardrailAgent:
         bs   = bull.get("confidence", 0.5) + (0.25 * tw if td > 0 else 0)
         brs  = bear.get("confidence", 0.5) + (0.25 * tw if td < 0 else 0)
         diff = abs(bs - brs)
-        if diff > 0.25:
+        if diff > 0.10:
             w = "bullish" if bs > brs else "bearish"
             return {"recommendation": w,
-                    "confidence": "HIGH" if diff > 0.40 else "MEDIUM",
+                    "confidence": "HIGH" if diff > 0.30 else ("MEDIUM" if diff > 0.20 else "LOW"),
                     "bull_score": round(bs, 3), "bear_score": round(brs, 3),
                     "winning_signals": (bull if bs > brs else bear).get("signals", []),
                     "rsi": rsi, "conflict": False}

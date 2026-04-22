@@ -33,7 +33,7 @@ class SummarizationAgent:
             "Output: 3-5 bullet points maximum. Use only information in the text below.\n\n"
             f"Filing segment:\n{text}\n\nSummary:"
         )
-        s = self._gen(prompt, 200)
+        s = self._gen(prompt, 120)
         return {"chunk_id": chunk["chunk_id"], "summary": s,
                 "has_conflict": "[CONFLICT]" in s}
 
@@ -69,7 +69,7 @@ class SummarizationAgent:
             "4. Risk flags (list any [CONFLICT] items)\n\n"
             "Final Summary:"
         )
-        return {"summary": self._gen(prompt, 400),
+        return {"summary": self._gen(prompt, 250),
                 "n_chunks": len(summaries), "n_conflicts": n_cf}
 
     # ------------------------------------------------------------------

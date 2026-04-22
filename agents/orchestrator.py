@@ -132,6 +132,42 @@ def run_pipeline(ticker: str, filing_type: str = "8-K") -> dict:
     }
 
 
+def run_pipeline_batch(tickers: list, filing_type: str = "8-K") -> list:
+    """
+    Pipeline parallelism across tickers:
+    While ticker N is in GPU stages (FinBERT / Phi-3-mini),
+    ticker N+1 ingestion runs on Node A CPU in parallel.
+    This is a second PDC contribution: inter-ticker pipelining.
+    """
+    from agents.ingestion_agent import IngestionAgent
+    from optimization.chunk_filter import ChunkFilter
+
+    ingestion    = IngestionAgent.options(resources={"node:__internal_head__": 0.001}).remote()
+    chunk_filter = ChunkFilter()
+    results      = []
+
+    # Pre-fetch first ticker
+    next_ref = ingestion.fetch_filing.remote(tickers[0], filing_type)
+
+    for i, ticker in enumerate(tickers):
+        # Start pre-fetching next ticker immediately (runs on Node A CPU)
+        if i + 1 < len(tickers):
+            future_ref = ingestion.fetch_filing.remote(tickers[i + 1], filing_type)
+
+        # Process current ticker using already-fetched filing
+        filing = ray.get(next_ref)
+        if "error" not in filing:
+            results.append(run_pipeline(ticker, filing_type))
+        else:
+            results.append({"ticker": ticker, "error": filing["error"]})
+
+        # Next iteration uses the pre-fetched filing
+        if i + 1 < len(tickers):
+            next_ref = future_ref
+
+    return results
+
+
 if __name__ == "__main__":
     import json
     ray.init(address="auto")

@@ -17,16 +17,16 @@ import ray
 
 
 def run_distributed(tickers: list) -> list:
-    """Run the full distributed pipeline for each ticker. Returns list of timing dicts."""
-    from agents.orchestrator import run_pipeline
+    """Run distributed pipeline with inter-ticker pipelining. Returns list of timing dicts."""
+    from agents.orchestrator import run_pipeline_batch
     results = []
-    for tk in tickers:
-        print(f"[Distributed] Running {tk} ...")
-        t0 = time.perf_counter()
-        out = run_pipeline(tk, "8-K")
-        elapsed = time.perf_counter() - t0
+    print(f"[Distributed] Running {tickers} with pipeline parallelism...")
+    batch = run_pipeline_batch(tickers, "8-K")
+    for out in batch:
+        tk = out.get("ticker", "?")
+        elapsed = out.get("timings", {}).get("total", 0)
         timings = out.get("timings", {})
-        results.append({
+        r = {
             "ticker": tk,
             "method": "distributed",
             "total_s": timings.get("total", elapsed),
@@ -41,10 +41,11 @@ def run_distributed(tickers: list) -> list:
             "t_serialize_ms": timings.get("t_serialize_ms"),
             "t_transfer_ms": timings.get("t_transfer_ms"),
             "t_deserialize_ms": timings.get("t_deserialize_ms"),
-        })
-        print(f"  → {results[-1]['total_s']:.2f}s  "
-              f"(chunks: {results[-1]['n_chunks_before']} → {results[-1]['n_chunks_after']}, "
-              f"{results[-1]['chunk_reduction_pct']}% reduced)")
+        }
+        results.append(r)
+        print(f"  → {r['total_s']:.2f}s  "
+              f"(chunks: {r['n_chunks_before']} → {r['n_chunks_after']}, "
+              f"{r['chunk_reduction_pct']}% reduced)")
     return results
 
 
