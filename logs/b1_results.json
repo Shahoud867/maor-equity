@@ -1,0 +1,34 @@
+[
+  {
+    "method": "B1_serial_full_doc",
+    "ticker": "AAPL",
+    "n_chunks": 12,
+    "timings": {
+      "ingestion": 4.606665849685669,
+      "chunk_filter_ms": 1262.6817226409912,
+      "n_chunks_before": 58,
+      "n_chunks_after": 12,
+      "sentiment": 15.733316659927368,
+      "summarisation": 353.45036029815674,
+      "technical": 4.983933210372925,
+      "guardrail": 34.25278115272522,
+      "total": 414.2904236316681
+    }
+  },
+  {
+    "method": "B1_serial_full_doc",
+    "ticker": "MSFT",
+    "n_chunks": 12,
+    "timings": {
+      "ingestion": 2.6638221740722656,
+      "chunk_filter_ms": 1392.0092582702637,
+      "n_chunks_before": 117,
+      "n_chunks_after": 12,
+      "sentiment": 11.497319221496582,
+      "summarisation": 1144.6436929702759,
+      "technical": 1.0078864097595215,
+      "guardrail": 110.49192070960999,
+      "total": 1271.6973383426666
+    }
+  }
+]
