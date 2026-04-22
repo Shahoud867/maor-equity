@@ -17,6 +17,9 @@ def main():
 
     os.makedirs(os.path.dirname(args.output) or ".", exist_ok=True)
 
+    # Keep Ray worker Python launch space-safe across nodes.
+    os.environ.setdefault("RAY_PYTHON", "python3")
+
     # Symlink project to a space-free path so Ray's working_dir zip uses a
     # clean path (the OneDrive path has spaces which confuse some tooling).
     _here = os.path.dirname(os.path.abspath(__file__))
@@ -32,6 +35,7 @@ def main():
     ray.init(
         address=args.address,
         runtime_env={
+            "py_executable": "bash ray_python_exec.sh",
             "working_dir": _working_dir,
             "excludes": [
                 "venv/", "data/", "results/", "logs/",
