@@ -50,7 +50,7 @@ if (-not $isAdmin) {
 # ---------------------------------------------------------------------------
 $NODE_A_TAILSCALE_IP   = "x.x.x.x"   # Auto-detected on Node A; set manually if auto-detect fails
 $NODE_B_TAILSCALE_IP   = "x.x.x.x"   # Node B Tailscale IP; set if known, else prompted at runtime
-$RAY_PORT              = 6379
+$RAY_PORT              = 6380   # 6379 is Redis default — avoid conflict
 $RAY_DASHBOARD_PORT    = 8265
 $NODE_B_SSH_USER       = "username"   # Node B Linux username (reserved for future SSH use)
 $RETRY_COUNT           = 3
