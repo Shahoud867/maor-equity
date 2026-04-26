@@ -358,7 +358,7 @@ if [ -z "$MAOR_PY" ] || echo "$MAOR_PY" | grep -qF ' '; then
     cp "$VENV_REAL/bin/python3" /tmp/maor_py_a 2>/dev/null && chmod +x /tmp/maor_py_a && MAOR_PY="/tmp/maor_py_a"
 fi
 PY_LIB=$(ls -d "$VENV_REAL/lib/python3."* 2>/dev/null | head -1)
-export PYTHONPATH="$PY_LIB/site-packages${PYTHONPATH:+:$PYTHONPATH}"
+export PYTHONPATH="$A_PROJECT:$PY_LIB/site-packages${PYTHONPATH:+:$PYTHONPATH}"
 
 # -- Ray environment variables ---------------------------------------------
 export LD_PRELOAD=""
@@ -757,7 +757,7 @@ if [ -z "$MAOR_PY" ] || echo "$MAOR_PY" | grep -qF ' '; then
     cp "$VENV_REAL/bin/python3" /tmp/maor_py_b 2>/dev/null && chmod +x /tmp/maor_py_b && MAOR_PY="/tmp/maor_py_b"
 fi
 PY_LIB=$(ls -d "$VENV_REAL/lib/python3."* 2>/dev/null | head -1)
-export PYTHONPATH="$PY_LIB/site-packages${PYTHONPATH:+:$PYTHONPATH}"
+export PYTHONPATH="$B_PROJECT:$PY_LIB/site-packages${PYTHONPATH:+:$PYTHONPATH}"
 
 # -- Ray environment variables ---------------------------------------------
 export LD_PRELOAD=""
