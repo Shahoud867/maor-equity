@@ -5,7 +5,7 @@ nodes:
   node_a:
     role: head
     host: localhost
-    ray_port: 6379
+    ray_port: 6380
     dashboard_port: 8265
     resources: { cpu: true, gpu: false }
 

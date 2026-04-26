@@ -8,7 +8,7 @@ Connects directly to the running Ray cluster and verifies:
 
 Usage:
     python verify_cluster.py
-    python verify_cluster.py --address 100.x.x.x:6379
+    python verify_cluster.py --address 100.x.x.x:6380
 """
 import argparse
 import os
@@ -40,7 +40,7 @@ except Exception as e:
     print(f"\nFAIL: Could not connect to Ray: {e}")
     print("\nSuggested fixes:")
     print("  1. Ensure nodeA.sh WSL window is open and shows Ray:UP")
-    print("  2. Run with explicit address: python verify_cluster.py --address 100.x.x.x:6379")
+    print("  2. Run with explicit address: python verify_cluster.py --address 100.x.x.x:6380")
     sys.exit(1)
 
 # ---------------------------------------------------------------------------
@@ -86,7 +86,7 @@ if len(alive) < 2:
     print("  export LD_PRELOAD=''")
     print("  export RAY_DISABLE_JEMALLOC=1")
     print("  export CUDA_VISIBLE_DEVICES=0")
-    print("  ray start --address=<TAILSCALE_IP>:6379 --num-gpus=1 --num-cpus=4")
+    print("  ray start --address=<TAILSCALE_IP>:6380 --num-gpus=1 --num-cpus=4")
     ray.shutdown()
     sys.exit(1)
 
