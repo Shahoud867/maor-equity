@@ -483,7 +483,6 @@ echo "  Starting Ray head node..."
     --num-gpus=0 \
     --object-store-memory=2147483648 \
     --plasma-directory=/tmp \
-    --timeout=300 \
     2>&1
 
 RAY_EXIT=$?
@@ -851,7 +850,6 @@ connect_worker() {
         --num-gpus=1 \
         --num-cpus=4 \
         --object-store-memory=2147483648 \
-        --timeout=300 \
         2>&1
 }
 
