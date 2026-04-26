@@ -363,8 +363,8 @@ export PYTHONPATH="$PY_LIB/site-packages${PYTHONPATH:+:$PYTHONPATH}"
 # -- Ray environment variables ---------------------------------------------
 export LD_PRELOAD=""
 export RAY_DISABLE_JEMALLOC=1
-export RAY_raylet_start_wait_time_s=120
-export RAY_GCS_SERVER_REQUEST_TIMEOUT_SECONDS=120
+export RAY_raylet_start_wait_time_s=300
+export RAY_GCS_SERVER_REQUEST_TIMEOUT_SECONDS=300
 
 # -- Logging helper --------------------------------------------------------
 log_msg() {
@@ -480,8 +480,10 @@ echo "  Starting Ray head node..."
     --node-ip-address="$TS_IP" \
     --disable-usage-stats \
     --num-cpus=2 \
-    --object-store-memory=268435456 \
+    --num-gpus=0 \
+    --object-store-memory=2147483648 \
     --plasma-directory=/tmp \
+    --timeout=300 \
     2>&1
 
 RAY_EXIT=$?
@@ -761,6 +763,8 @@ export PYTHONPATH="$PY_LIB/site-packages${PYTHONPATH:+:$PYTHONPATH}"
 # -- Ray environment variables ---------------------------------------------
 export LD_PRELOAD=""
 export RAY_DISABLE_JEMALLOC=1
+export RAY_raylet_start_wait_time_s=300
+export RAY_GCS_SERVER_REQUEST_TIMEOUT_SECONDS=300
 export CUDA_VISIBLE_DEVICES=0
 
 # -- Logging helper --------------------------------------------------------
@@ -846,6 +850,8 @@ connect_worker() {
         --address="$HEAD_IP:$RAY_PORT" \
         --num-gpus=1 \
         --num-cpus=4 \
+        --object-store-memory=2147483648 \
+        --timeout=300 \
         2>&1
 }
 
