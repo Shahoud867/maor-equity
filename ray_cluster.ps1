@@ -149,24 +149,15 @@ function Add-RayFirewallRules {
 
     Write-Host "  Firewall rules added (inbound + outbound)." -ForegroundColor Green
 
-    # Portproxy bridges Tailscale IP to localhost for static Ray ports.
-    # With WSL2 mirrored networking these are usually not required, but
-    # keeping them ensures compatibility with NAT-mode WSL2 as well.
+    # In WSL2 mirrored networking mode the Tailscale IP is shared between
+    # Windows and WSL, so a portproxy listening on $TsIP:$RAY_PORT would
+    # occupy that address *inside* WSL -- causing Ray's GCS grpc server to
+    # fail with "Address already in use" even though ss reports the port free.
+    # Fix: only DELETE stale portproxies (from previous runs); never ADD them.
     foreach ($port in @($RAY_PORT, $RAY_DASHBOARD_PORT, 10001)) {
         $null = netsh interface portproxy delete v4tov4 listenaddress=$TsIP listenport=$port 2>&1
-        $null = netsh interface portproxy add    v4tov4 listenaddress=$TsIP listenport=$port `
-            connectaddress=127.0.0.1 connectport=$port 2>&1
     }
-
-    Set-Service  -Name iphlpsvc -StartupType Automatic -ErrorAction SilentlyContinue
-    Start-Service -Name iphlpsvc -ErrorAction SilentlyContinue
-
-    $check = netsh interface portproxy show v4tov4 2>&1
-    if ($check -match "$RAY_PORT") {
-        Write-Host "  Portproxy verified." -ForegroundColor Green
-    } else {
-        Write-Log -Message "Portproxy could not be confirmed." -Level "WARN"
-    }
+    Write-Host "  Stale portproxies removed (none added -- WSL2 mirrored mode)." -ForegroundColor Green
 }
 
 function Test-TailscaleReachability {
