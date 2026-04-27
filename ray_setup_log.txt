@@ -1,0 +1,95 @@
+[2026-04-21 12:11:14] [INFO] === Script started. Role=A ===
+[2026-04-21 12:11:15] [INFO] Windows Tailscale IP: 100.88.99.30
+[2026-04-21 12:11:15] [INFO] Node A Tailscale IP: 100.88.99.30
+[2026-04-21 12:11:15] [INFO] Configuring firewall rules for 100.88.99.30
+[2026-04-21 12:11:16] [INFO] Node A setup complete. WSL window opened. TS_IP=100.88.99.30
+[2026-04-21 12:17:39] [INFO] === Script started. Role=A ===
+[2026-04-21 12:17:40] [INFO] Windows Tailscale IP: 100.88.99.30
+[2026-04-21 12:17:40] [INFO] Node A Tailscale IP: 100.88.99.30
+[2026-04-21 12:17:40] [INFO] Configuring firewall rules for 100.88.99.30
+[2026-04-21 12:17:41] [INFO] Node A setup complete. WSL window opened. TS_IP=100.88.99.30
+[2026-04-21 15:35:09] [INFO] === Script started. Role=A ===
+[2026-04-21 15:35:09] [INFO] Windows Tailscale IP: 100.88.99.30
+[2026-04-21 15:35:09] [INFO] Node A Tailscale IP: 100.88.99.30
+[2026-04-21 15:35:09] [INFO] Configuring firewall rules for 100.88.99.30
+[2026-04-21 15:35:11] [INFO] Node A setup complete. WSL window opened. TS_IP=100.88.99.30
+[2026-04-21 15:40:36] [INFO] === Script started. Role=A ===
+[2026-04-21 15:40:37] [INFO] Windows Tailscale IP: 100.88.99.30
+[2026-04-21 15:40:37] [INFO] Node A Tailscale IP: 100.88.99.30
+[2026-04-21 15:40:37] [INFO] Configuring firewall rules for 100.88.99.30
+[2026-04-21 15:40:39] [INFO] Node A setup complete. WSL window opened. TS_IP=100.88.99.30
+[2026-04-21 16:21:30] [INFO] === Script started. Role=A ===
+[2026-04-21 16:21:31] [INFO] Windows Tailscale IP: 100.88.99.30
+[2026-04-21 16:21:31] [INFO] Node A Tailscale IP: 100.88.99.30
+[2026-04-21 16:21:31] [INFO] Configuring firewall rules for 100.88.99.30
+[2026-04-21 16:21:32] [INFO] Node A setup complete. WSL window opened. TS_IP=100.88.99.30
+[2026-04-26 22:42:56] [INFO] === Script started. Role=A ===
+[2026-04-26 22:42:58] [INFO] Windows Tailscale IP: 100.88.99.30
+[2026-04-26 22:42:58] [INFO] Node A Tailscale IP: 100.88.99.30
+[2026-04-26 22:42:58] [INFO] Configuring firewall rules for 100.88.99.30
+[2026-04-26 22:43:00] [INFO] Node A setup complete. WSL window opened. TS_IP=100.88.99.30
+[2026-04-26 22:47:06] [INFO] === Script started. Role=A ===
+[2026-04-26 22:47:06] [INFO] Windows Tailscale IP: 100.88.99.30
+[2026-04-26 22:47:06] [INFO] Node A Tailscale IP: 100.88.99.30
+[2026-04-26 22:47:06] [INFO] Configuring firewall rules for 100.88.99.30
+[2026-04-26 22:47:08] [INFO] Node A setup complete. WSL window opened. TS_IP=100.88.99.30
+[2026-04-26 22:51:23] [INFO] === Script started. Role=A ===
+[2026-04-26 22:51:23] [INFO] Windows Tailscale IP: 100.88.99.30
+[2026-04-26 22:51:24] [INFO] Node A Tailscale IP: 100.88.99.30
+[2026-04-26 22:51:24] [INFO] Configuring firewall rules for 100.88.99.30
+[2026-04-26 22:51:26] [INFO] Node A setup complete. WSL window opened. TS_IP=100.88.99.30
+[2026-04-26 22:53:36] [INFO] === Script started. Role=A ===
+[2026-04-26 22:53:36] [INFO] Windows Tailscale IP: 100.88.99.30
+[2026-04-26 22:53:42] [INFO] Node A Tailscale IP: 100.88.99.30
+[2026-04-26 22:53:43] [INFO] Configuring firewall rules for 100.88.99.30
+[2026-04-26 22:53:44] [INFO] Node A setup complete. WSL window opened. TS_IP=100.88.99.30
+[2026-04-26 23:01:12] [INFO] === Script started. Role=A ===
+[2026-04-26 23:01:12] [INFO] Windows Tailscale IP: 100.88.99.30
+[2026-04-26 23:01:12] [INFO] Node A Tailscale IP: 100.88.99.30
+[2026-04-26 23:01:12] [INFO] Configuring firewall rules for 100.88.99.30
+[2026-04-26 23:01:14] [INFO] Node A setup complete. WSL window opened. TS_IP=100.88.99.30
+[2026-04-26 23:04:41] [INFO] === Script started. Role=A ===
+[2026-04-26 23:04:42] [INFO] Windows Tailscale IP: 100.88.99.30
+[2026-04-26 23:04:42] [INFO] Node A Tailscale IP: 100.88.99.30
+[2026-04-26 23:04:42] [INFO] Configuring firewall rules for 100.88.99.30
+[2026-04-26 23:04:44] [INFO] Node A setup complete. WSL window opened. TS_IP=100.88.99.30
+[2026-04-26 23:07:26] [INFO] === Script started. Role=A ===
+[2026-04-26 23:07:26] [INFO] Windows Tailscale IP: 100.88.99.30
+[2026-04-26 23:07:26] [INFO] Node A Tailscale IP: 100.88.99.30
+[2026-04-26 23:07:26] [INFO] Configuring firewall rules for 100.88.99.30
+[2026-04-26 23:07:28] [INFO] Node A setup complete. WSL window opened. TS_IP=100.88.99.30
+[2026-04-26 23:12:45] [INFO] === Script started. Role=A ===
+[2026-04-26 23:12:45] [INFO] Windows Tailscale IP: 100.88.99.30
+[2026-04-26 23:12:45] [INFO] Node A Tailscale IP: 100.88.99.30
+[2026-04-26 23:12:45] [INFO] Configuring firewall rules for 100.88.99.30
+[2026-04-26 23:12:47] [INFO] Node A setup complete. WSL window opened. TS_IP=100.88.99.30
+[2026-04-26 23:21:50] [INFO] === Script started. Role=A ===
+[2026-04-26 23:21:51] [INFO] Windows Tailscale IP: 100.88.99.30
+[2026-04-26 23:21:51] [INFO] Node A Tailscale IP: 100.88.99.30
+[2026-04-26 23:21:51] [INFO] Configuring firewall rules for 100.88.99.30
+[2026-04-26 23:21:53] [INFO] Node A setup complete. WSL window opened. TS_IP=100.88.99.30
+[2026-04-26 23:23:46] [INFO] === Script started. Role=A ===
+[2026-04-26 23:23:46] [INFO] Windows Tailscale IP: 100.88.99.30
+[2026-04-26 23:23:46] [INFO] Node A Tailscale IP: 100.88.99.30
+[2026-04-26 23:23:46] [INFO] Configuring firewall rules for 100.88.99.30
+[2026-04-26 23:23:48] [INFO] Node A setup complete. WSL window opened. TS_IP=100.88.99.30
+[2026-04-26 23:59:59] [INFO] === Script started. Role=A ===
+[2026-04-27 00:00:00] [INFO] Windows Tailscale IP: 100.88.99.30
+[2026-04-27 00:00:01] [INFO] Node A Tailscale IP: 100.88.99.30
+[2026-04-27 00:00:01] [INFO] Configuring firewall rules for 100.88.99.30
+[2026-04-27 00:00:02] [INFO] Node A setup complete. WSL window opened. TS_IP=100.88.99.30
+[2026-04-27 00:00:24] [INFO] === Script started. Role=A ===
+[2026-04-27 00:00:25] [INFO] Windows Tailscale IP: 100.88.99.30
+[2026-04-27 00:00:25] [INFO] Node A Tailscale IP: 100.88.99.30
+[2026-04-27 00:00:25] [INFO] Configuring firewall rules for 100.88.99.30
+[2026-04-27 00:00:27] [INFO] Node A setup complete. WSL window opened. TS_IP=100.88.99.30
+[2026-04-27 00:01:58] [INFO] === Script started. Role=A ===
+[2026-04-27 00:01:59] [INFO] Windows Tailscale IP: 100.88.99.30
+[2026-04-27 00:01:59] [INFO] Node A Tailscale IP: 100.88.99.30
+[2026-04-27 00:01:59] [INFO] Configuring firewall rules for 100.88.99.30
+[2026-04-27 00:02:00] [INFO] Node A setup complete. WSL window opened. TS_IP=100.88.99.30
+[2026-04-27 11:38:00] [INFO] === Script started. Role=A ===
+[2026-04-27 11:38:01] [INFO] Windows Tailscale IP: 100.88.99.30
+[2026-04-27 11:38:07] [INFO] Node A Tailscale IP: 100.88.99.30
+[2026-04-27 11:38:07] [INFO] Configuring firewall rules for 100.88.99.30
+[2026-04-27 11:38:08] [INFO] Node A setup complete. WSL window opened. TS_IP=100.88.99.30

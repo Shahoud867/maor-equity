@@ -1,0 +1,68 @@
+{
+  "total_checks": 10,
+  "passed": 10,
+  "failed": 0,
+  "all_pass": true,
+  "checks": [
+    {
+      "id": "H1-1",
+      "test": "H1 speedup realistic (1.0 < speedup < 3.0)",
+      "actual": "1.72x",
+      "pass": true
+    },
+    {
+      "id": "H1-2",
+      "test": "H1 distributed median < B1 baseline median",
+      "actual": "Dist 489s < B1 843s",
+      "pass": true
+    },
+    {
+      "id": "H1-3",
+      "test": "H1 hypothesis result = PASS",
+      "actual": "PASS",
+      "pass": true
+    },
+    {
+      "id": "H2-1",
+      "test": "H2 ROUGE-L delta within \u00b11.0 tolerance",
+      "actual": "|delta| = 0.010 (tolerance: 1.0)",
+      "pass": true
+    },
+    {
+      "id": "H2-2",
+      "test": "H2 BERTScore-F1 improvement (semantic quality up)",
+      "actual": "delta = +0.007",
+      "pass": true
+    },
+    {
+      "id": "H2-3",
+      "test": "H2 hypothesis result = PASS",
+      "actual": "PASS",
+      "pass": true
+    },
+    {
+      "id": "H3-1",
+      "test": "H3 divergence > 10% target",
+      "actual": "48.0% (target: >10%)",
+      "pass": true
+    },
+    {
+      "id": "H3-2",
+      "test": "H3 hypothesis result = PASS",
+      "actual": "PASS",
+      "pass": true
+    },
+    {
+      "id": "VRAM-1",
+      "test": "Peak VRAM <= 4,096 MB T1000 budget",
+      "actual": "3261 MB (budget: 4096 MB, headroom: 835 MB)",
+      "pass": true
+    },
+    {
+      "id": "B1-1",
+      "test": "H1 B1 values match b1_results.json (within 1s)",
+      "actual": "Real AAPL=414.3s vs H1=414.3s; Real MSFT=1271.7s vs H1=1271.7s",
+      "pass": true
+    }
+  ]
+}

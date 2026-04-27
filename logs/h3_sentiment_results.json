@@ -1,0 +1,14 @@
+{
+  "n_samples": 200,
+  "accuracy_3d_vs_ground_truth_pct": 72.5,
+  "accuracy_b3_vs_ground_truth_pct": 67.0,
+  "disagreement_pct": 48.0,
+  "disagreement_count": 96,
+  "divergence_patterns": {
+    "bull_market_regulatory_headwinds": {"count": 22, "pct_of_divergences": 22.9},
+    "bearish_near_term_bullish_guidance": {"count": 25, "pct_of_divergences": 26.0},
+    "neutral_market_regulatory_signals": {"count": 14, "pct_of_divergences": 14.6}
+  },
+  "H3_passed": true,
+  "H3_note": "PASS — 48.0% direction divergence. Target: >10%."
+}

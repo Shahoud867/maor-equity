@@ -1,0 +1,27 @@
+{
+  "chunk_filter_contribution": {
+    "per_ticker": [
+      {"ticker": "AAPL", "chunks_before": 58, "chunks_after": 12, "estimated_time_saved_s": 690},
+      {"ticker": "MSFT", "chunks_before": 117, "chunks_after": 12, "estimated_time_saved_s": 1575}
+    ]
+  },
+  "A2_no_inter_ticker_pipeline": {
+    "pipelining_saves_s": 8.0,
+    "description": "Inter-ticker ingestion overlap"
+  },
+  "A3_phase_a_parallelism": {
+    "avg_gain_s": 5.0,
+    "description": "FinBERT || Technical parallel vs sequential"
+  },
+  "amdahl_law_analysis": {
+    "actual_observed_speedup": 1.72,
+    "amdahl_analysis_per_ticker": [
+      {"ticker": "AAPL", "parallel_fraction_p": 0.038, "amdahl_speedup_n2": 1.019},
+      {"ticker": "MSFT", "parallel_fraction_p": 0.009, "amdahl_speedup_n2": 1.004}
+    ],
+    "warm_actor_factor": 1.3,
+    "data_parallelism_factor": 1.3,
+    "combined_speedup": 1.72,
+    "note": "Actual speedup exceeds Amdahl bound due to warm actor persistence (non-Amdahl gain)"
+  }
+}

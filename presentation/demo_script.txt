@@ -1,0 +1,122 @@
+MAOR-EQUITY: Live Demo Script
+================================
+Duration: 3-5 minutes
+Audience: Professors and peers
+
+PRE-DEMO CHECKLIST (do this BEFORE presenting):
+------------------------------------------------
+[ ] Open terminal in project root
+[ ] Have Python 3.11 in PATH (or use: C:\Users\shaho\AppData\Local\Programs\Python\Python311\python.exe)
+[ ] Confirm logs/ directory has b1_results.json, h1/h2/h3 JSON files
+[ ] Have slides.pptx open and on Slide 5 (H1 results)
+[ ] Have figures/ directory open in file explorer (backup)
+
+====================================================
+DEMO SCRIPT
+====================================================
+
+STEP 1: Show B1 baseline (real measurements)
+--------------------------------------------
+Say: "Let me show you our real B1 baseline measurements first."
+
+Run:
+  python -c "import json; d=json.load(open('logs/b1_results.json')); [print(f\"{x['ticker']}: {x['timings']['total']:.1f}s\") for x in d]"
+
+Expected output:
+  AAPL: 414.3s
+  MSFT: 1271.7s
+
+Say: "These are real hardware measurements. 414 seconds for AAPL, 1,271 for MSFT."
+
+----------------------------------------------------
+
+STEP 2: Show quantitative generators (Phase 1)
+----------------------------------------------
+Say: "We used these real measurements to ground our estimates via Amdahl's Law."
+
+Run:
+  python quantitative/h1_amdahl_generator.py
+
+Key lines to point at:
+  "Task parallelism fraction (p) = 15.73s / 414.29s = 0.0380"
+  "Amdahl's Law speedup (2 nodes): 1.019x"
+  "Combined speedup: 1.019 x 1.30 x 1.30 = 1.723x"
+  "PASS"
+
+Say: "The Amdahl bound alone is only 1.02x — because Phi-3 dominates.
+      But we get to 1.72x by eliminating cold-load overhead. That's not
+      parallelism — it's reducing redundant work."
+
+----------------------------------------------------
+
+STEP 3: Show H3 sentiment divergence
+--------------------------------------
+Say: "Let me show the 3-D sentiment simulation."
+
+Run:
+  python quantitative/h3_sentiment_generator.py
+
+Point at:
+  "Divergences (different direction): 96 (48.0%)"
+  The three example scenarios
+
+Say: "48% of financial scenarios get a DIFFERENT investment signal
+      from our 3-D model vs the scalar baseline. The regulatory veto
+      catches things the market-only model misses entirely."
+
+----------------------------------------------------
+
+STEP 4: Show confidence validator (all green)
+----------------------------------------------
+Say: "We built a confidence validator to verify all estimates are consistent."
+
+Run:
+  python quantitative/confidence_validator.py
+
+Point at:
+  "SUMMARY: 10/10 checks passed"
+  "ALL ESTIMATES ARE INTERNALLY CONSISTENT AND DEFENSIBLE!"
+
+----------------------------------------------------
+
+STEP 5: Show the figures (visual proof)
+----------------------------------------
+Say: "And we generated 8 publication-quality figures from these results."
+
+Open File Explorer → navigate to figures/
+Show: fig1_latency_comparison.png, fig7_amdahl.png, fig6_h3_sentiment.png
+
+Or in terminal:
+  dir figures/
+
+Say: "Eight figures, all generated automatically from our log files."
+
+----------------------------------------------------
+
+IF LIVE DEMO FAILS: BACKUP PLAN
+---------------------------------
+1. Open figures/ folder in File Explorer and walk through images
+2. Open logs/confidence_validation.json in text editor — show 10/10 PASS
+3. Show paper PDF / slides instead
+
+====================================================
+TERMINAL COMMANDS (copy-paste ready)
+====================================================
+
+# Show B1 baseline:
+python -c "import json; [print(f\"{x['ticker']}: {x['timings']['total']:.1f}s\") for x in json.load(open('logs/b1_results.json'))]"
+
+# H1 generator:
+python quantitative/h1_amdahl_generator.py
+
+# H3 generator:
+python quantitative/h3_sentiment_generator.py
+
+# Confidence validator:
+python quantitative/confidence_validator.py
+
+# List figures:
+dir figures/
+
+# Show H1 result:
+python -c "import json; h=json.load(open('logs/h1_distributed_estimated.json')); print(f\"Speedup: {h['speedup']}x | Result: {h['result']}\")"

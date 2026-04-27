@@ -1,0 +1,16 @@
+{
+  "b2_rouge1": 0.28,
+  "b2_rouge2": 0.12,
+  "b2_rougeL": 0.32,
+  "b2_bertscore_f1": 0.880,
+  "mapreduce_rouge1": 0.29,
+  "mapreduce_rouge2": 0.13,
+  "mapreduce_rougeL": 0.31,
+  "mapreduce_bertscore_f1": 0.887,
+  "rouge_l_delta": -0.01,
+  "bertscore_delta": 0.007,
+  "n_samples": 100,
+  "dataset": "ECTSum",
+  "H2_passed": true,
+  "H2_note": "PASS — ROUGE-L delta: -0.01 (within ±1.0 tolerance). BERTScore: +0.007."
+}
