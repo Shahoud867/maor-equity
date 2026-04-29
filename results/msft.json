@@ -1,0 +1,65 @@
+{
+  "ticker": "MSFT",
+  "filing_type": "8-K",
+  "n_chunks_raw": 117,
+  "n_chunks_filtered": 12,
+  "chunk_reduction_pct": 89.7,
+  "sentiment_vector": [
+    [
+      0.1972017603757774,
+      0.7607102030332277,
+      0.04208803659099492
+    ],
+    [
+      3.9934893011441405e-06,
+      0.9999945164027507,
+      1.4901079481881122e-06
+    ],
+    [
+      0.4372158310701535,
+      0.5482896463336486,
+      0.014494522596197858
+    ]
+  ],
+  "summary": {
+    "summary": "\n\nMicrosoft Corporation (MSFT) has reported a par value of $0.00000625 per common stock and 3.125% Notes Due in 2028, both trading on NASDAQ. The company's common stock and 2.625% Notes Due in 2033 are also listed on NASDAQ. The company's dividends and share repurchases increased by 32% in Q2 2026. Microsoft continues to innovate with hundreds of product releases and customer success stories. The earnings call will be webcasted and available for replay until January 28, 2027.\n\n\nKey Financial Metrics:\n- Par value: $0.00000625 per common stock\n- 3.125% Notes Due in 2028\n- 2.625% Notes Due in 2033\n\n\nDirectional Outlook:\n- Bullish (due to growth in Cloud and AI, increased dividends and share repurchases, and strong customer success stories)\n\n\nRisk Flags:\n- [CONFLICT] The trading symbol for Microsoft is reported as \"XLAT\" in the document, which contradicts the summary's claim of \"XMSFT.\"\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n",
+    "n_chunks": 12,
+    "n_conflicts": 5,
+    "doc_id": "MSFT_8-K"
+  },
+  "technical": {
+    "ticker": "MSFT",
+    "rsi": 86.74329312550097,
+    "rsi_signal": "overbought",
+    "macd_crossover_bullish": false,
+    "price_vs_upper_band": -2.7929477216357554,
+    "vwap": 403.7920140430239,
+    "current_price": 426.43499755859375,
+    "status": "ok"
+  },
+  "guardrail": {
+    "recommendation": "UNRESOLVED",
+    "confidence": "LOW",
+    "bull_score": 0.0,
+    "bear_score": 0.184,
+    "conflict": true,
+    "conflict_signals": [],
+    "rsi": 86.74329312550097,
+    "note": "Manual review recommended"
+  },
+  "timings": {
+    "ingestion": 81.10913340999832,
+    "chunk_filter_ms": 14235.097340999346,
+    "n_chunks_before_filter": 117,
+    "n_chunks_after_filter": 12,
+    "chunk_reduction_pct": 89.7,
+    "t_encode_ms": 0.019291001081001014,
+    "t_serialize_ms": 2.666458000021521,
+    "t_transfer_ms": 13152.66910399805,
+    "t_deserialize_ms": 547144.2864220007,
+    "t_comm_total_ms": 560299.6412749998,
+    "parallel_stage": 560.2997034180007,
+    "guardrail": 50.26360318699881,
+    "total": 777.121875578996
+  }
+}

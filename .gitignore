@@ -37,10 +37,9 @@ model_cache/
 hf_cache/
 ~/.cache/
 
-# Logs and results (transient)
+# logs/ and results (transient)
 logs/*.log
 logs/*.jsonl
-results/
 
 # Ngrok / secrets — NEVER commit tokens
 .ngrok/
