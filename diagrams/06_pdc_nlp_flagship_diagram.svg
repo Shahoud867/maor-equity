@@ -1,0 +1,225 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="2200" height="1400" viewBox="0 0 2200 1400">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#f3f8ff"/>
+      <stop offset="55%" stop-color="#eefcf4"/>
+      <stop offset="100%" stop-color="#fff8ef"/>
+    </linearGradient>
+
+    <linearGradient id="headerGrad" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="#113a67"/>
+      <stop offset="100%" stop-color="#1d6b8c"/>
+    </linearGradient>
+
+    <linearGradient id="nodeAGrad" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#e8f1ff"/>
+      <stop offset="100%" stop-color="#dcecff"/>
+    </linearGradient>
+
+    <linearGradient id="nodeBGrad" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#fff0ef"/>
+      <stop offset="100%" stop-color="#ffe3df"/>
+    </linearGradient>
+
+    <linearGradient id="metricGrad" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#ebfff0"/>
+      <stop offset="100%" stop-color="#d8fbe6"/>
+    </linearGradient>
+
+    <filter id="shadow" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="4" stdDeviation="6" flood-color="#12324f" flood-opacity="0.15"/>
+    </filter>
+
+    <marker id="arrow" markerWidth="11" markerHeight="11" refX="9" refY="3.5" orient="auto" markerUnits="strokeWidth">
+      <path d="M0,0 L10,3.5 L0,7 z" fill="#2f4f73"/>
+    </marker>
+
+    <style>
+      .title { font: 700 44px 'Segoe UI', sans-serif; fill: #ffffff; }
+      .subtitle { font: 500 20px 'Segoe UI', sans-serif; fill: #d9ebff; }
+      .section { font: 700 26px 'Segoe UI', sans-serif; fill: #15385f; }
+      .sectionSub { font: 700 22px 'Segoe UI', sans-serif; fill: #15385f; }
+      .h { font: 700 20px 'Segoe UI', sans-serif; fill: #12395f; }
+      .t { font: 500 16px 'Segoe UI', sans-serif; fill: #214e77; }
+      .small { font: 500 14px 'Segoe UI', sans-serif; fill: #335f86; }
+      .kpi { font: 800 30px 'Segoe UI', sans-serif; fill: #13703d; }
+      .kpiLabel { font: 600 15px 'Segoe UI', sans-serif; fill: #1f6d46; }
+      .kpiBody { font: 500 13px 'Segoe UI', sans-serif; fill: #2b5f48; }
+      .chipA { fill: #f6faff; stroke: #5d8fbe; stroke-width: 2; rx: 14; }
+      .chipB { fill: #fff7f6; stroke: #c4685b; stroke-width: 2; rx: 14; }
+      .panel { fill: #ffffff; stroke: #bdd0e2; stroke-width: 2; rx: 18; }
+      .arrow { stroke: #2f4f73; stroke-width: 2.8; fill: none; marker-end: url(#arrow); }
+      .arrowSoft { stroke: #5d7897; stroke-width: 2.2; fill: none; marker-end: url(#arrow); }
+      .dashed { stroke-dasharray: 8 7; }
+    </style>
+  </defs>
+
+  <rect width="2200" height="1400" fill="url(#bg)"/>
+
+  <rect x="40" y="30" width="2120" height="130" rx="20" fill="url(#headerGrad)" filter="url(#shadow)"/>
+  <text x="80" y="95" class="title">MAOR-Equity: Distributed PDC + NLP Research Architecture</text>
+  <text x="80" y="132" class="subtitle">Two-node heterogeneous Ray system for automated equity research with guardrailed decision intelligence</text>
+
+  <rect x="40" y="190" width="540" height="520" class="panel" filter="url(#shadow)"/>
+  <text x="68" y="230" class="section">1) External Data and Inputs</text>
+
+  <rect x="70" y="260" width="480" height="110" class="chipA"/>
+  <text x="95" y="300" class="h">SEC EDGAR Filings</text>
+  <text x="95" y="328" class="t">8-K, 10-K regulatory narratives and event disclosures</text>
+  <text x="95" y="350" class="small">Raw filing text -> cleaned corpus for chunking</text>
+
+  <rect x="70" y="390" width="480" height="110" class="chipA"/>
+  <text x="95" y="430" class="h">yfinance Market Stream</text>
+  <text x="95" y="458" class="t">OHLCV time series over 90-day window</text>
+  <text x="95" y="480" class="small">Input for RSI, MACD, Bollinger, VWAP</text>
+
+  <rect x="70" y="520" width="480" height="160" class="chipA"/>
+  <text x="95" y="560" class="h">Model Supply Chain</text>
+  <text x="95" y="588" class="t">ProsusAI/finbert, finbert-tone, Phi-3-mini-4k-instruct</text>
+  <text x="95" y="610" class="small">4-bit NF4 quantization + cached checkpoints on GPU worker</text>
+  <text x="95" y="632" class="small">No fine-tuning, reproducible pretrained model stack</text>
+
+  <rect x="620" y="190" width="760" height="820" fill="url(#nodeAGrad)" stroke="#4d7ead" stroke-width="2.5" rx="20" filter="url(#shadow)"/>
+  <text x="650" y="230" class="section">2) Node A (CPU Head): Orchestration and Data Engineering</text>
+
+  <rect x="660" y="260" width="680" height="110" class="chipA"/>
+  <text x="688" y="300" class="h">Ray Head + CLI Control Plane</text>
+  <text x="688" y="327" class="t">run_pipeline.py initializes runtime_env and cluster scheduling</text>
+  <text x="688" y="349" class="small">Ports 6380 (cluster) and 8265 (dashboard), orchestration entrypoint</text>
+
+  <rect x="660" y="390" width="680" height="130" class="chipA"/>
+  <text x="688" y="430" class="h">IngestionAgent</text>
+  <text x="688" y="457" class="t">Fetches filing text -> HTML stripping -> tokenized chunk generation</text>
+  <text x="688" y="479" class="small">Sliding chunks: 512 tokens, stride 64</text>
+
+  <rect x="660" y="540" width="680" height="130" class="chipA"/>
+  <text x="688" y="580" class="h">ChunkFilter + DimensionRouter</text>
+  <text x="688" y="607" class="t">TF-IDF deduplication + routing into market/regulatory/temporal streams</text>
+  <text x="688" y="629" class="small">Major performance lever: removes redundant segments before GPU inference</text>
+
+  <rect x="660" y="690" width="680" height="130" class="chipA"/>
+  <text x="688" y="730" class="h">TechnicalAnalysisAgent</text>
+  <text x="688" y="757" class="t">Computes RSI-14, MACD crossover, Bollinger position, VWAP spread</text>
+  <text x="688" y="779" class="small">Runs in parallel with Phase A sentiment to overlap CPU and GPU workloads</text>
+
+  <rect x="660" y="840" width="680" height="140" class="chipA"/>
+  <text x="688" y="880" class="h">PDC Contribution on Node A</text>
+  <text x="688" y="907" class="t">Asynchronous remote submission + object reference management</text>
+  <text x="688" y="929" class="small">Encodes/serializes payloads and pipelines inter-ticker execution in batch mode</text>
+  <text x="688" y="951" class="small">Communication model: Tenc + Tser + Txfer + Tdeser + Tdec</text>
+
+  <rect x="1420" y="190" width="740" height="820" fill="url(#nodeBGrad)" stroke="#bf5a4e" stroke-width="2.5" rx="20" filter="url(#shadow)"/>
+  <text x="1450" y="226" class="sectionSub">3) Node B (GPU Worker): NLP Inference</text>
+  <text x="1450" y="252" class="sectionSub">and Decision Intelligence</text>
+
+  <rect x="1460" y="260" width="660" height="130" class="chipB"/>
+  <text x="1488" y="300" class="h">FinBERTBundle (Phase A)</text>
+  <text x="1488" y="327" class="t">Market + Regulatory + Temporal sentiment classification</text>
+  <text x="1488" y="349" class="small">Returns 3x3 sentiment matrix for downstream arbitration</text>
+  <text x="1880" y="349" class="small">GPU actor</text>
+
+  <rect x="1460" y="410" width="660" height="110" class="chipB"/>
+  <text x="1488" y="450" class="h">GPU Barrier: flush_gpu_cache()</text>
+  <text x="1488" y="477" class="t">Forces safe phase transition before Phi-3 intensive generation</text>
+
+  <rect x="1460" y="540" width="660" height="150" class="chipB"/>
+  <text x="1488" y="580" class="h">Phi3ModelActor (shared) + SummarizationAgent (Phase B)</text>
+  <text x="1488" y="607" class="t">Map-reduce summarization over filtered chunks</text>
+  <text x="1488" y="629" class="small">Single shared model actor serves summarization and guardrail prompts</text>
+  <text x="1488" y="651" class="small">Avoids duplicate LLM loading under 4 GB VRAM constraints</text>
+
+  <rect x="1460" y="710" width="660" height="170" class="chipB"/>
+  <text x="1488" y="750" class="h">GuardrailAgent</text>
+  <text x="1488" y="777" class="t">Dual-perspective prompting: Bull case vs Bear case</text>
+  <text x="1488" y="799" class="small">Rule-based arbiter fuses LLM outputs with technical indicators</text>
+  <text x="1488" y="821" class="small">Outputs recommendation: bullish / bearish / unresolved + confidence</text>
+  <text x="1488" y="843" class="small">Produces auditable rationale and conflict trace</text>
+
+  <rect x="40" y="740" width="540" height="300" class="panel" filter="url(#shadow)"/>
+  <text x="68" y="780" class="section">4) Parallelism Timeline (Conceptual)</text>
+
+  <line x1="104" y1="842" x2="484" y2="842" stroke="#4d6f92" stroke-width="3"/>
+  <text x="104" y="830" class="small">t0</text>
+  <text x="454" y="830" class="small">t_end</text>
+
+  <rect x="102" y="804" width="150" height="32" fill="#cfe3ff" stroke="#5d8fbe" rx="8"/>
+  <text x="114" y="826" class="small">Ingestion + Chunking</text>
+
+  <rect x="270" y="804" width="110" height="32" fill="#ffd9d6" stroke="#c4685b" rx="8"/>
+  <text x="282" y="826" class="small">FinBERT</text>
+
+  <rect x="270" y="848" width="110" height="32" fill="#d9f6e4" stroke="#2e8557" rx="8"/>
+  <text x="282" y="870" class="small">Technical</text>
+
+  <rect x="398" y="804" width="86" height="32" fill="#ffeecf" stroke="#b7881a" rx="8"/>
+  <text x="410" y="826" class="small">Flush</text>
+
+  <path d="M484 842 H520" stroke="#4d6f92" stroke-width="3" fill="none" marker-end="url(#arrow)"/>
+
+  <rect x="102" y="898" width="310" height="34" fill="#ffd9d6" stroke="#c4685b" rx="8"/>
+  <text x="114" y="921" class="small">Phi-3 Summarization (dominant stage)</text>
+
+  <rect x="420" y="898" width="92" height="34" fill="#ffd9d6" stroke="#c4685b" rx="8"/>
+  <text x="432" y="921" class="small">Guardrail</text>
+
+  <text x="104" y="955" class="t">CPU and GPU overlap in Phase A.</text>
+  <text x="104" y="979" class="t">GPU-heavy stages are serialized in Phase B.</text>
+  <text x="104" y="1003" class="t">This prevents OOM and preserves strong speedup.</text>
+
+  <rect x="620" y="1085" width="1540" height="300" fill="url(#metricGrad)" stroke="#8ac6a1" stroke-width="2.5" rx="20" filter="url(#shadow)"/>
+  <text x="650" y="1125" class="section">5) Research Outcomes, Evaluation and Academic Value</text>
+
+  <rect x="680" y="1155" width="250" height="180" class="panel"/>
+  <text x="705" y="1190" class="kpi">H1</text>
+  <text x="705" y="1226" class="kpiLabel">Latency vs B1 Baseline</text>
+  <text x="705" y="1250" class="kpiBody">Median: 843s -&gt; 489s</text>
+  <text x="705" y="1272" class="kpiBody">Speedup: 1.72x</text>
+  <text x="705" y="1294" class="kpiBody">Reduction: 42% (H1 PASS)</text>
+
+  <rect x="960" y="1155" width="250" height="180" class="panel"/>
+  <text x="985" y="1190" class="kpi">H2</text>
+  <text x="985" y="1226" class="kpiLabel">Quality vs B2 Baseline</text>
+  <text x="985" y="1250" class="kpiBody">ROUGE-L: 0.32 -&gt; 0.31 (stable)</text>
+  <text x="985" y="1272" class="kpiBody">BERTScore F1: 0.880 -&gt; 0.887</text>
+  <text x="985" y="1294" class="kpiBody">Delta: +0.007 (H2 PASS)</text>
+
+  <rect x="1240" y="1155" width="250" height="180" class="panel"/>
+  <text x="1265" y="1190" class="kpi">H3</text>
+  <text x="1265" y="1226" class="kpiLabel">Accuracy vs B3 Baseline</text>
+  <text x="1265" y="1250" class="kpiBody">3D sentiment: 72.5%</text>
+  <text x="1265" y="1272" class="kpiBody">B3 sentiment: 67.0%</text>
+  <text x="1265" y="1294" class="kpiBody">Gain: +5.5 pts (H3 PASS)</text>
+
+  <rect x="1520" y="1155" width="300" height="180" class="panel"/>
+  <text x="1545" y="1190" class="kpi">PDC + NLP Impact</text>
+  <text x="1545" y="1228" class="kpiBody">- Distributed scheduling with Ray actors</text>
+  <text x="1545" y="1250" class="kpiBody">- Quantized multi-model NLP on 4 GB VRAM</text>
+  <text x="1545" y="1272" class="kpiBody">- Guardrailed recommendation with rationale</text>
+  <text x="1545" y="1294" class="kpiBody">- Reproducible logs for academic validation</text>
+
+  <rect x="1850" y="1155" width="270" height="180" class="panel"/>
+  <text x="1875" y="1190" class="kpi">Final Output</text>
+  <text x="1875" y="1228" class="kpiBody">Recommendation</text>
+  <text x="1875" y="1250" class="kpiBody">Confidence</text>
+  <text x="1875" y="1272" class="kpiBody">Sentiment Matrix</text>
+  <text x="1875" y="1294" class="kpiBody">Summary + Timings + Flags</text>
+
+  <!-- Cross-panel connectors -->
+  <path d="M550 315 H640" class="arrow"/>
+  <path d="M550 445 H640" class="arrow"/>
+  <path d="M550 600 H640" class="arrow"/>
+
+  <path d="M1340 455 H1460" class="arrow"/>
+  <path d="M1340 605 H1460" class="arrow"/>
+  <path d="M1340 755 H1460" class="arrow"/>
+
+  <path d="M1790 390 V410" class="arrowSoft dashed"/>
+  <path d="M1790 520 V540" class="arrowSoft dashed"/>
+  <path d="M1790 690 V710" class="arrowSoft dashed"/>
+
+  <path d="M1930 880 V1085" class="arrow"/>
+
+  <path d="M1120 1000 V1085" class="arrowSoft"/>
+
+  <text x="60" y="1388" class="subtitle" fill="#345a7a">Prepared for academic panel: integrated view of distributed systems design, NLP modeling strategy, and evaluative rigor.</text>
+</svg>
