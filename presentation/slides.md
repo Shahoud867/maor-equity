@@ -48,7 +48,11 @@ Node A (CPU Head) ←——Ray cluster——→ Node B (GPU Worker)
 4. `flush_gpu_cache()` → Phase B: Phi-3-mini map-reduce (Node B GPU)
 5. Guardrail → Bull/Bear recommendation
 
-**[INSERT fig1_latency_comparison.png]**
+**[ARCHITECTURE DIAGRAM — Full slide]**
+
+![MAOR-Equity System Architecture](../diagrams/06_pdc_nlp_flagship_diagram.svg)
+
+> **Presenter note:** Walk the panel section by section — top-left (inputs), Node A (blue, CPU), Node B (red, GPU), bottom-left (parallelism timeline), bottom (hypothesis results). This single diagram tells the entire project story.
 
 ---
 
