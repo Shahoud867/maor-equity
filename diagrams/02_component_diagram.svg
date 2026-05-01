@@ -1,0 +1,80 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="980" viewBox="0 0 1600 980">
+  <defs>
+    <style>
+      .title { font: 700 28px 'Segoe UI', sans-serif; fill: #10243f; }
+      .subtitle { font: 500 15px 'Segoe UI', sans-serif; fill: #355070; }
+      .h { font: 700 15px 'Segoe UI', sans-serif; fill: #0f2f55; }
+      .t { font: 500 12px 'Segoe UI', sans-serif; fill: #143b62; }
+      .mod { fill: #f4f8ff; stroke: #2f6fb0; stroke-width: 1.8; rx: 10; }
+      .gpu { fill: #fff2f2; stroke: #c3443e; stroke-width: 1.8; rx: 10; }
+      .arrow { stroke: #495f7c; stroke-width: 2; fill: none; marker-end: url(#m); }
+    </style>
+    <marker id="m" markerWidth="10" markerHeight="10" refX="9" refY="3" orient="auto" markerUnits="strokeWidth">
+      <path d="M0,0 L9,3 L0,6 z" fill="#495f7c"/>
+    </marker>
+  </defs>
+
+  <rect width="1600" height="980" fill="#ffffff"/>
+  <text x="40" y="55" class="title">MAOR-Equity: Component and Module Diagram</text>
+  <text x="40" y="82" class="subtitle">Code-level view of module responsibilities and actor dependencies</text>
+
+  <rect x="80" y="140" width="280" height="95" class="mod"/>
+  <text x="100" y="175" class="h">run_pipeline.py</text>
+  <text x="100" y="198" class="t">CLI entry, Ray init, output write</text>
+
+  <rect x="430" y="140" width="320" height="110" class="mod"/>
+  <text x="450" y="175" class="h">agents/orchestrator.py</text>
+  <text x="450" y="198" class="t">run_pipeline(), batching, phase barrier</text>
+  <text x="450" y="218" class="t">timings + VRAM trace</text>
+
+  <rect x="80" y="320" width="280" height="95" class="mod"/>
+  <text x="100" y="355" class="h">IngestionAgent</text>
+  <text x="100" y="378" class="t">fetch_filing(), chunk_document()</text>
+
+  <rect x="430" y="320" width="320" height="95" class="mod"/>
+  <text x="450" y="355" class="h">ChunkFilter + DimensionRouter</text>
+  <text x="450" y="378" class="t">dedup + classify chunk intent</text>
+
+  <rect x="80" y="500" width="280" height="95" class="mod"/>
+  <text x="100" y="535" class="h">TechnicalAnalysisAgent</text>
+  <text x="100" y="558" class="t">RSI/MACD/Bollinger/VWAP</text>
+
+  <rect x="900" y="220" width="290" height="100" class="gpu"/>
+  <text x="920" y="255" class="h">FinBERTBundle</text>
+  <text x="920" y="278" class="t">classify_all() + flush_gpu_cache()</text>
+
+  <rect x="1260" y="180" width="280" height="100" class="gpu"/>
+  <text x="1280" y="215" class="h">Phi3ModelActor</text>
+  <text x="1280" y="238" class="t">shared generate(prompt)</text>
+
+  <rect x="900" y="420" width="290" height="100" class="gpu"/>
+  <text x="920" y="455" class="h">SummarizationAgent</text>
+  <text x="920" y="478" class="t">process_document(), reduce()</text>
+
+  <rect x="900" y="620" width="290" height="100" class="gpu"/>
+  <text x="920" y="655" class="h">GuardrailAgent</text>
+  <text x="920" y="678" class="t">assess(), _arbitrate()</text>
+
+  <rect x="1240" y="640" width="300" height="80" class="mod"/>
+  <text x="1260" y="672" class="h">results/*.json + logs/*.json</text>
+
+  <line x1="360" y1="188" x2="430" y2="188" class="arrow"/>
+  <line x1="590" y1="250" x2="590" y2="320" class="arrow"/>
+  <line x1="590" y1="415" x2="590" y2="500" class="arrow"/>
+
+  <line x1="750" y1="188" x2="900" y2="270" class="arrow"/>
+  <line x1="750" y1="188" x2="900" y2="470" class="arrow"/>
+  <line x1="750" y1="188" x2="900" y2="670" class="arrow"/>
+
+  <line x1="1190" y1="470" x2="1260" y2="230" class="arrow"/>
+  <line x1="1190" y1="670" x2="1260" y2="230" class="arrow"/>
+
+  <line x1="360" y1="367" x2="430" y2="367" class="arrow"/>
+  <line x1="750" y1="367" x2="900" y2="270" class="arrow"/>
+  <line x1="750" y1="367" x2="900" y2="470" class="arrow"/>
+
+  <line x1="360" y1="545" x2="900" y2="670" class="arrow"/>
+  <line x1="1190" y1="670" x2="1240" y2="680" class="arrow"/>
+
+  <text x="40" y="930" class="subtitle">Decision note: Summarization and Guardrail share a single Phi-3 actor to control memory and startup overhead.</text>
+</svg>

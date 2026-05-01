@@ -1,0 +1,119 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="980" viewBox="0 0 1600 980">
+  <defs>
+    <style>
+      .title { font: 700 28px 'Segoe UI', sans-serif; fill: #10243f; }
+      .subtitle { font: 500 15px 'Segoe UI', sans-serif; fill: #355070; }
+      .h { font: 700 15px 'Segoe UI', sans-serif; fill: #0f2f55; }
+      .t { font: 500 12px 'Segoe UI', sans-serif; fill: #143b62; }
+      .ext { fill: #fff8e8; stroke: #b27a00; stroke-width: 2; rx: 12; }
+      .nA { fill: #e9f2ff; stroke: #2f6fb0; stroke-width: 2; rx: 12; }
+      .nB { fill: #fff0f0; stroke: #c3443e; stroke-width: 2; rx: 12; }
+      .inner { fill: #f7fbff; stroke: #7093ba; stroke-width: 1.4; rx: 10; }
+      .arrow { stroke: #4d627e; stroke-width: 2; fill: none; marker-end: url(#m); }
+      .vpn { fill: #f1ecff; stroke: #6b52b5; stroke-width: 2; rx: 12; }
+    </style>
+    <marker id="m" markerWidth="10" markerHeight="10" refX="9" refY="3" orient="auto" markerUnits="strokeWidth">
+      <path d="M0,0 L9,3 L0,6 z" fill="#4d627e"/>
+    </marker>
+  </defs>
+
+  <rect width="1600" height="980" fill="#ffffff"/>
+  <text x="40" y="55" class="title">MAOR-Equity: Deployment Diagram</text>
+  <text x="40" y="82" class="subtitle">Physical and runtime deployment across two hosts with Ray cluster communication</text>
+
+  <rect x="40" y="140" width="300" height="260" class="ext"/>
+  <text x="62" y="172" class="h">External Services</text>
+
+  <rect x="62" y="190" width="256" height="56" class="inner"/>
+  <text x="82" y="223" class="t">SEC EDGAR API</text>
+
+  <rect x="62" y="258" width="256" height="56" class="inner"/>
+  <text x="82" y="291" class="t">yfinance API</text>
+
+  <rect x="62" y="326" width="256" height="56" class="inner"/>
+  <text x="82" y="359" class="t">HuggingFace Hub</text>
+
+  <rect x="700" y="30" width="420" height="70" class="vpn"/>
+  <text x="722" y="60" class="h">Secure Overlay / VPN</text>
+  <text x="722" y="82" class="t">Inter-node Ray cluster communication</text>
+
+  <rect x="380" y="140" width="540" height="720" class="nA"/>
+  <text x="402" y="172" class="h">Node A: Windows + WSL2 Ubuntu (Ray Head)</text>
+
+  <rect x="420" y="220" width="460" height="90" class="inner"/>
+  <text x="442" y="253" class="h">Ray Head Runtime</text>
+  <text x="442" y="275" class="t">Port 6380 (cluster) | Port 8265 (dashboard)</text>
+
+  <rect x="420" y="340" width="460" height="100" class="inner"/>
+  <text x="442" y="373" class="h">run_pipeline.py + Orchestrator</text>
+  <text x="442" y="395" class="t">DAG control, timing collection, object references</text>
+
+  <rect x="420" y="480" width="220" height="90" class="inner"/>
+  <text x="442" y="514" class="h">IngestionAgent</text>
+  <text x="442" y="536" class="t">filing fetch + chunking</text>
+
+  <rect x="660" y="480" width="220" height="90" class="inner"/>
+  <text x="682" y="514" class="h">TechnicalAgent</text>
+  <text x="682" y="536" class="t">RSI, MACD, BB, VWAP</text>
+
+  <rect x="420" y="610" width="460" height="90" class="inner"/>
+  <text x="442" y="644" class="h">ChunkFilter + DimensionRouter</text>
+  <text x="442" y="666" class="t">deduplicate chunks and route dimensions</text>
+
+  <rect x="960" y="140" width="600" height="720" class="nB"/>
+  <text x="982" y="172" class="h">Node B: Ubuntu + NVIDIA T1000 4 GB (Ray Worker)</text>
+
+  <rect x="1000" y="220" width="520" height="90" class="inner"/>
+  <text x="1022" y="253" class="h">Ray Worker Runtime</text>
+  <text x="1022" y="275" class="t">Executes remote tasks from head node scheduler</text>
+
+  <rect x="1000" y="360" width="250" height="90" class="inner"/>
+  <text x="1022" y="394" class="h">FinBERTBundle</text>
+  <text x="1022" y="416" class="t">Phase A sentiment</text>
+
+  <rect x="1290" y="360" width="230" height="90" class="inner"/>
+  <text x="1312" y="394" class="h">Phi3ModelActor</text>
+  <text x="1312" y="416" class="t">Shared LLM runtime</text>
+
+  <rect x="1000" y="500" width="250" height="90" class="inner"/>
+  <text x="1022" y="534" class="h">SummarizationAgent</text>
+  <text x="1022" y="556" class="t">Map-reduce summary</text>
+
+  <rect x="1290" y="500" width="230" height="90" class="inner"/>
+  <text x="1312" y="534" class="h">GuardrailAgent</text>
+  <text x="1312" y="556" class="t">Bull/Bear arbitration</text>
+
+  <rect x="1000" y="640" width="520" height="110" class="inner"/>
+  <text x="1022" y="674" class="h">GPU Execution Policy</text>
+  <text x="1022" y="696" class="t">Phase A: FinBERT + CPU parallel work</text>
+  <text x="1022" y="718" class="t">Barrier: flush cache -> Phase B: Phi-3 tasks</text>
+
+  <rect x="560" y="890" width="480" height="60" class="inner"/>
+  <text x="582" y="926" class="h">Persistent artifacts: results/*.json and logs/*.json</text>
+
+  <!-- External services -> pipeline endpoints (orthogonal lanes) -->
+  <path d="M318 218 H360 V525 H420" class="arrow"/>
+  <path d="M318 286 H620 V525 H660" class="arrow"/>
+  <path d="M318 354 H900 V385 H1000" class="arrow"/>
+  <path d="M318 354 H940 V425 H1290" class="arrow"/>
+
+  <!-- Node A -> Node B runtime/actors (clean orchestrator fan-out) -->
+  <line x1="880" y1="265" x2="1000" y2="265" class="arrow"/>
+  <path d="M880 375 H960 V405 H1000" class="arrow"/>
+  <path d="M880 385 H950 V545 H1000" class="arrow"/>
+  <path d="M880 395 H970 V545 H1290" class="arrow"/>
+
+  <!-- Agent -> shared model links -->
+  <path d="M1250 545 H1270 V430 H1290" class="arrow"/>
+  <line x1="1405" y1="500" x2="1405" y2="450" class="arrow"/>
+
+  <!-- Execution traces into policy block -->
+  <line x1="1125" y1="450" x2="1125" y2="640" class="arrow"/>
+  <line x1="1405" y1="450" x2="1405" y2="640" class="arrow"/>
+
+  <!-- Outputs to persistent artifacts -->
+  <path d="M650 700 V760 L760 890" class="arrow"/>
+  <path d="M1260 750 V810 L1000 890" class="arrow"/>
+
+  <text x="40" y="968" class="subtitle">Deployment intent: keep control plane on Node A and isolate GPU inference on Node B for predictable performance and resource governance.</text>
+</svg>

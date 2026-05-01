@@ -1,0 +1,104 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1700" height="980" viewBox="0 0 1700 980">
+  <defs>
+    <style>
+      .title { font: 700 28px 'Segoe UI', sans-serif; fill: #10243f; }
+      .subtitle { font: 500 15px 'Segoe UI', sans-serif; fill: #355070; }
+      .label { font: 700 13px 'Segoe UI', sans-serif; fill: #17385d; }
+      .msg { font: 500 12px 'Segoe UI', sans-serif; fill: #143b62; }
+      .lane { stroke: #9ab1c8; stroke-width: 1.5; stroke-dasharray: 6 6; }
+      .head { fill: #eef5ff; stroke: #2f6fb0; stroke-width: 1.8; rx: 8; }
+      .arrow { stroke: #4d627e; stroke-width: 2; fill: none; marker-end: url(#m); }
+      .phase { fill: #f7fbff; stroke: #c3d4e7; stroke-width: 1; rx: 10; }
+    </style>
+    <marker id="m" markerWidth="10" markerHeight="10" refX="9" refY="3" orient="auto" markerUnits="strokeWidth">
+      <path d="M0,0 L9,3 L0,6 z" fill="#4d627e"/>
+    </marker>
+  </defs>
+
+  <rect width="1700" height="980" fill="#ffffff"/>
+  <text x="40" y="55" class="title">MAOR-Equity: Sequence Diagram (Single Ticker Execution)</text>
+  <text x="40" y="82" class="subtitle">Control and message timeline for end-to-end run_pipeline invocation</text>
+
+  <rect x="40" y="130" width="1620" height="790" class="phase"/>
+
+  <g>
+    <rect x="70" y="150" width="150" height="50" class="head"/>
+    <text x="85" y="181" class="label">User CLI</text>
+    <line x1="145" y1="200" x2="145" y2="900" class="lane"/>
+
+    <rect x="280" y="150" width="170" height="50" class="head"/>
+    <text x="295" y="181" class="label">run_pipeline.py</text>
+    <line x1="365" y1="200" x2="365" y2="900" class="lane"/>
+
+    <rect x="520" y="150" width="170" height="50" class="head"/>
+    <text x="540" y="181" class="label">Orchestrator</text>
+    <line x1="605" y1="200" x2="605" y2="900" class="lane"/>
+
+    <rect x="760" y="150" width="160" height="50" class="head"/>
+    <text x="780" y="181" class="label">Ingestion</text>
+    <line x1="840" y1="200" x2="840" y2="900" class="lane"/>
+
+    <rect x="980" y="150" width="170" height="50" class="head"/>
+    <text x="995" y="181" class="label">FinBERTBundle</text>
+    <line x1="1065" y1="200" x2="1065" y2="900" class="lane"/>
+
+    <rect x="1210" y="150" width="190" height="50" class="head"/>
+    <text x="1225" y="181" class="label">Summarize/Guardrail</text>
+    <line x1="1305" y1="200" x2="1305" y2="900" class="lane"/>
+
+    <rect x="1460" y="150" width="170" height="50" class="head"/>
+    <text x="1485" y="181" class="label">Phi3 Actor</text>
+    <line x1="1545" y1="200" x2="1545" y2="900" class="lane"/>
+  </g>
+
+  <line x1="145" y1="250" x2="365" y2="250" class="arrow"/>
+  <text x="180" y="242" class="msg">run command</text>
+
+  <line x1="365" y1="290" x2="605" y2="290" class="arrow"/>
+  <text x="410" y="282" class="msg">run_pipeline(ticker, filing)</text>
+
+  <line x1="605" y1="330" x2="1545" y2="330" class="arrow"/>
+  <text x="850" y="322" class="msg">initialize/warm shared Phi3ModelActor</text>
+
+  <line x1="605" y1="370" x2="840" y2="370" class="arrow"/>
+  <text x="655" y="362" class="msg">fetch_filing.remote()</text>
+
+  <line x1="840" y1="410" x2="605" y2="410" class="arrow"/>
+  <text x="655" y="402" class="msg">filing text</text>
+
+  <line x1="605" y1="450" x2="1065" y2="450" class="arrow"/>
+  <text x="735" y="442" class="msg">Phase A: classify_all.remote()</text>
+
+  <line x1="605" y1="490" x2="1305" y2="490" class="arrow"/>
+  <text x="790" y="482" class="msg">Phase A parallel: technical analysis</text>
+
+  <line x1="1065" y1="530" x2="605" y2="530" class="arrow"/>
+  <text x="740" y="522" class="msg">sentiment outputs</text>
+
+  <line x1="605" y1="570" x2="1065" y2="570" class="arrow"/>
+  <text x="760" y="562" class="msg">flush_gpu_cache()</text>
+
+  <line x1="605" y1="620" x2="1305" y2="620" class="arrow"/>
+  <text x="760" y="612" class="msg">process_document.remote()</text>
+
+  <line x1="1305" y1="660" x2="1545" y2="660" class="arrow"/>
+  <text x="1360" y="652" class="msg">generate(map/reduce prompts)</text>
+
+  <line x1="1545" y1="700" x2="1305" y2="700" class="arrow"/>
+  <text x="1365" y="692" class="msg">summary text</text>
+
+  <line x1="1305" y1="740" x2="1545" y2="740" class="arrow"/>
+  <text x="1360" y="732" class="msg">generate(bull/bear prompts)</text>
+
+  <line x1="1545" y1="780" x2="1305" y2="780" class="arrow"/>
+  <text x="1365" y="772" class="msg">guardrail evidence</text>
+
+  <line x1="1305" y1="820" x2="605" y2="820" class="arrow"/>
+  <text x="860" y="812" class="msg">recommendation + confidence</text>
+
+  <line x1="605" y1="860" x2="365" y2="860" class="arrow"/>
+  <text x="430" y="852" class="msg">result dict</text>
+
+  <line x1="365" y1="890" x2="145" y2="890" class="arrow"/>
+  <text x="190" y="882" class="msg">console + JSON output</text>
+</svg>

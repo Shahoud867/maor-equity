@@ -1,0 +1,79 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="900" viewBox="0 0 1600 900">
+  <defs>
+    <style>
+      .title { font: 700 28px 'Segoe UI', sans-serif; fill: #10243f; }
+      .subtitle { font: 500 15px 'Segoe UI', sans-serif; fill: #355070; }
+      .h { font: 700 15px 'Segoe UI', sans-serif; fill: #0f2f55; }
+      .t { font: 500 12px 'Segoe UI', sans-serif; fill: #143b62; }
+      .src { fill: #fff8e7; stroke: #b27a00; stroke-width: 1.8; rx: 10; }
+      .proc { fill: #ecf4ff; stroke: #2f6fb0; stroke-width: 1.8; rx: 10; }
+      .gpu { fill: #fff1f1; stroke: #c3443e; stroke-width: 1.8; rx: 10; }
+      .store { fill: #ebf9ef; stroke: #1e7a3e; stroke-width: 1.8; rx: 10; }
+      .arrow { stroke: #4d627e; stroke-width: 2; fill: none; marker-end: url(#m); }
+    </style>
+    <marker id="m" markerWidth="10" markerHeight="10" refX="9" refY="3" orient="auto" markerUnits="strokeWidth">
+      <path d="M0,0 L9,3 L0,6 z" fill="#4d627e"/>
+    </marker>
+  </defs>
+
+  <rect width="1600" height="900" fill="#ffffff"/>
+  <text x="40" y="55" class="title">MAOR-Equity: Data Flow Diagram</text>
+  <text x="40" y="82" class="subtitle">Transformation path from external raw data to recommendation artifact</text>
+
+  <rect x="60" y="160" width="220" height="80" class="src"/>
+  <text x="80" y="193" class="h">SEC EDGAR</text>
+  <text x="80" y="215" class="t">filing text source</text>
+
+  <rect x="60" y="300" width="220" height="80" class="src"/>
+  <text x="80" y="333" class="h">yfinance</text>
+  <text x="80" y="355" class="t">historical OHLCV</text>
+
+  <rect x="60" y="440" width="220" height="80" class="src"/>
+  <text x="80" y="473" class="h">HuggingFace</text>
+  <text x="80" y="495" class="t">model weights/cache</text>
+
+  <rect x="340" y="160" width="280" height="90" class="proc"/>
+  <text x="360" y="195" class="h">P1 IngestionAgent</text>
+  <text x="360" y="217" class="t">download + clean filing</text>
+
+  <rect x="680" y="160" width="280" height="90" class="proc"/>
+  <text x="700" y="195" class="h">P2 ChunkFilter</text>
+  <text x="700" y="217" class="t">chunk + deduplicate</text>
+
+  <rect x="1020" y="120" width="280" height="90" class="gpu"/>
+  <text x="1040" y="155" class="h">P3 FinBERTBundle</text>
+  <text x="1040" y="177" class="t">3x sentiment streams</text>
+
+  <rect x="1020" y="260" width="280" height="90" class="gpu"/>
+  <text x="1040" y="295" class="h">P5 SummarizationAgent</text>
+  <text x="1040" y="317" class="t">map-reduce summary</text>
+
+  <rect x="1020" y="400" width="280" height="90" class="proc"/>
+  <text x="1040" y="435" class="h">P4 TechnicalAnalysisAgent</text>
+  <text x="1040" y="457" class="t">indicators from market data</text>
+
+  <rect x="1360" y="260" width="200" height="110" class="gpu"/>
+  <text x="1378" y="300" class="h">P6 Guardrail</text>
+  <text x="1378" y="322" class="t">evidence fusion</text>
+
+  <rect x="1320" y="520" width="240" height="90" class="store"/>
+  <text x="1340" y="555" class="h">results/logs JSON</text>
+  <text x="1340" y="577" class="t">final recommendation record</text>
+
+  <line x1="280" y1="200" x2="340" y2="200" class="arrow"/>
+  <line x1="620" y1="200" x2="680" y2="200" class="arrow"/>
+  <line x1="960" y1="200" x2="1020" y2="165" class="arrow"/>
+  <line x1="960" y1="200" x2="1020" y2="305" class="arrow"/>
+
+  <line x1="280" y1="340" x2="1020" y2="445" class="arrow"/>
+  <line x1="280" y1="480" x2="1020" y2="165" class="arrow"/>
+  <line x1="280" y1="480" x2="1020" y2="305" class="arrow"/>
+
+  <line x1="1300" y1="165" x2="1360" y2="295" class="arrow"/>
+  <line x1="1300" y1="305" x2="1360" y2="315" class="arrow"/>
+  <line x1="1300" y1="445" x2="1360" y2="335" class="arrow"/>
+
+  <line x1="1460" y1="370" x2="1460" y2="520" class="arrow"/>
+
+  <text x="40" y="850" class="subtitle">Primary fusion artifacts: sentiment matrix (3x3), structured summary, and technical signal set.</text>
+</svg>

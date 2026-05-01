@@ -1,0 +1,89 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="900" viewBox="0 0 1600 900">
+  <defs>
+    <style>
+      .title { font: 700 28px 'Segoe UI', sans-serif; fill: #10243f; }
+      .subtitle { font: 500 15px 'Segoe UI', sans-serif; fill: #355070; }
+      .h { font: 700 16px 'Segoe UI', sans-serif; fill: #0f2f55; }
+      .t { font: 500 13px 'Segoe UI', sans-serif; fill: #143b62; }
+      .small { font: 500 12px 'Segoe UI', sans-serif; fill: #19435f; }
+      .boxA { fill: #e9f2ff; stroke: #2f6fb0; stroke-width: 2; rx: 12; }
+      .boxB { fill: #ffeef0; stroke: #c3443e; stroke-width: 2; rx: 12; }
+      .boxN { fill: #f7fbff; stroke: #6e91b8; stroke-width: 1.5; rx: 10; }
+      .arrow { stroke: #445b78; stroke-width: 2.2; fill: none; marker-end: url(#m); }
+      .dashed { stroke-dasharray: 8 6; }
+    </style>
+    <marker id="m" markerWidth="10" markerHeight="10" refX="9" refY="3" orient="auto" markerUnits="strokeWidth">
+      <path d="M0,0 L9,3 L0,6 z" fill="#445b78"/>
+    </marker>
+  </defs>
+
+  <rect x="0" y="0" width="1600" height="900" fill="#ffffff"/>
+  <text x="40" y="55" class="title">MAOR-Equity: High-Level System Architecture</text>
+  <text x="40" y="82" class="subtitle">Two-node distributed multi-agent pipeline with Ray orchestration and GPU phase control</text>
+
+  <rect x="60" y="130" width="700" height="660" class="boxA"/>
+  <text x="85" y="165" class="h">Node A (Head): CPU, orchestration, ingestion, technical analytics</text>
+
+  <rect x="840" y="130" width="700" height="660" class="boxB"/>
+  <text x="865" y="165" class="h">Node B (Worker): NVIDIA T1000 4 GB, sentiment + summarization + guardrail</text>
+
+  <rect x="110" y="220" width="250" height="90" class="boxN"/>
+  <text x="125" y="255" class="t">IngestionAgent</text>
+  <text x="125" y="278" class="small">fetch_filing, chunk_document</text>
+
+  <rect x="410" y="220" width="300" height="90" class="boxN"/>
+  <text x="425" y="255" class="t">ChunkFilter + DimensionRouter</text>
+  <text x="425" y="278" class="small">dedup + route market/regulatory/temporal</text>
+
+  <rect x="110" y="370" width="250" height="90" class="boxN"/>
+  <text x="125" y="405" class="t">TechnicalAnalysisAgent</text>
+  <text x="125" y="428" class="small">RSI, MACD, Bollinger, VWAP</text>
+
+  <rect x="410" y="370" width="300" height="90" class="boxN"/>
+  <text x="425" y="405" class="t">Orchestrator</text>
+  <text x="425" y="428" class="small">phase control, timing, Ray refs</text>
+
+  <rect x="890" y="220" width="280" height="90" class="boxN"/>
+  <text x="905" y="255" class="t">FinBERTBundle (Phase A)</text>
+  <text x="905" y="278" class="small">3-dimension sentiment inference</text>
+
+  <rect x="1210" y="220" width="280" height="90" class="boxN"/>
+  <text x="1225" y="255" class="t">flush_gpu_cache barrier</text>
+  <text x="1225" y="278" class="small">prevents overlap OOM</text>
+
+  <rect x="890" y="370" width="280" height="90" class="boxN"/>
+  <text x="905" y="405" class="t">Phi3ModelActor (shared)</text>
+  <text x="905" y="428" class="small">single resident model actor</text>
+
+  <rect x="1210" y="370" width="280" height="90" class="boxN"/>
+  <text x="1225" y="405" class="t">SummarizationAgent</text>
+  <text x="1225" y="428" class="small">map-reduce document summary</text>
+
+  <rect x="1050" y="530" width="280" height="90" class="boxN"/>
+  <text x="1065" y="565" class="t">GuardrailAgent</text>
+  <text x="1065" y="588" class="small">bull/bear + rule arbitration</text>
+
+  <rect x="640" y="40" width="300" height="60" class="boxN"/>
+  <text x="658" y="76" class="t">Inputs: SEC EDGAR filings + yfinance data</text>
+
+  <rect x="1070" y="700" width="380" height="70" class="boxN"/>
+  <text x="1088" y="736" class="t">Output: recommendation + confidence + rationale + timings</text>
+
+  <line x1="940" y1="100" x2="190" y2="220" class="arrow"/>
+  <line x1="940" y1="100" x2="235" y2="370" class="arrow"/>
+
+  <line x1="360" y1="265" x2="410" y2="265" class="arrow"/>
+  <line x1="560" y1="310" x2="560" y2="370" class="arrow"/>
+
+  <line x1="710" y1="415" x2="890" y2="265" class="arrow"/>
+  <line x1="710" y1="415" x2="1210" y2="415" class="arrow dashed"/>
+
+  <line x1="1170" y1="265" x2="1210" y2="265" class="arrow"/>
+  <line x1="1350" y1="310" x2="1350" y2="370" class="arrow"/>
+  <line x1="1210" y1="415" x2="1170" y2="415" class="arrow"/>
+  <line x1="1030" y1="460" x2="1180" y2="530" class="arrow"/>
+  <line x1="1350" y1="460" x2="1190" y2="530" class="arrow"/>
+  <line x1="1190" y1="620" x2="1260" y2="700" class="arrow"/>
+
+  <text x="60" y="850" class="subtitle">Design note: GPU phases are intentionally serialized (FinBERT then Phi-3) while CPU and GPU work overlap in Phase A.</text>
+</svg>

@@ -1,0 +1,160 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1920" height="1080" viewBox="0 0 1920 1080">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#f7fbff"/>
+      <stop offset="100%" stop-color="#eef7f0"/>
+    </linearGradient>
+    <style>
+      .title { font: 700 42px 'Segoe UI', sans-serif; fill: #10243f; }
+      .subtitle { font: 500 18px 'Segoe UI', sans-serif; fill: #355070; }
+      .cardTitle { font: 700 21px 'Segoe UI', sans-serif; fill: #0f2f55; }
+      .cardText { font: 500 14px 'Segoe UI', sans-serif; fill: #234b70; }
+      .small { font: 500 12px 'Segoe UI', sans-serif; fill: #356080; }
+      .kpi { font: 700 14px 'Segoe UI', sans-serif; fill: #1e7a3e; }
+      .cardA { fill: #ffffff; stroke: #bfd3e6; stroke-width: 2; rx: 18; }
+      .chip { fill: #e9f2ff; stroke: #2f6fb0; stroke-width: 1.5; rx: 8; }
+      .chipGPU { fill: #fff0f0; stroke: #c3443e; stroke-width: 1.5; rx: 8; }
+      .chipOut { fill: #ebf9ef; stroke: #1e7a3e; stroke-width: 1.5; rx: 8; }
+      .arrow { stroke: #4d627e; stroke-width: 2; fill: none; marker-end: url(#m); }
+      .line { stroke: #88a2bf; stroke-width: 1.4; fill: none; }
+    </style>
+    <marker id="m" markerWidth="10" markerHeight="10" refX="9" refY="3" orient="auto" markerUnits="strokeWidth">
+      <path d="M0,0 L9,3 L0,6 z" fill="#4d627e"/>
+    </marker>
+  </defs>
+
+  <rect width="1920" height="1080" fill="url(#bg)"/>
+  <text x="60" y="74" class="title">MAOR-Equity Architecture Board</text>
+  <text x="60" y="104" class="subtitle">Combined presentation panel: high-level architecture, components, data flow, sequence, and deployment</text>
+
+  <rect x="60" y="140" width="1790" height="900" class="cardA"/>
+
+  <rect x="90" y="175" width="850" height="390" class="cardA"/>
+  <text x="120" y="215" class="cardTitle">1. High-Level System Architecture</text>
+  <text x="120" y="240" class="cardText">Two-node Ray pipeline with CPU orchestration on Node A and GPU inference on Node B.</text>
+
+  <rect x="125" y="275" width="360" height="250" class="chip"/>
+  <text x="145" y="306" class="cardText">Node A (Head)</text>
+  <text x="145" y="330" class="small">Orchestrator</text>
+  <text x="145" y="352" class="small">IngestionAgent</text>
+  <text x="145" y="374" class="small">ChunkFilter + DimensionRouter</text>
+  <text x="145" y="396" class="small">TechnicalAnalysisAgent</text>
+
+  <rect x="545" y="275" width="360" height="250" class="chipGPU"/>
+  <text x="565" y="306" class="cardText">Node B (Worker)</text>
+  <text x="565" y="330" class="small">FinBERTBundle</text>
+  <text x="565" y="352" class="small">Phi3ModelActor (shared)</text>
+  <text x="565" y="374" class="small">SummarizationAgent</text>
+  <text x="565" y="396" class="small">GuardrailAgent</text>
+
+  <line x1="485" y1="400" x2="545" y2="400" class="arrow"/>
+  <text x="490" y="385" class="small">Ray refs</text>
+
+  <rect x="1320" y="275" width="500" height="250" class="chipOut"/>
+  <text x="1345" y="312" class="cardText">Board KPIs</text>
+  <text x="1345" y="340" class="kpi">Parallel Phase A + serialized GPU Phase B</text>
+  <text x="1345" y="366" class="kpi">Shared Phi-3 actor to control VRAM pressure</text>
+  <text x="1345" y="392" class="kpi">Traceable JSON outputs for evaluation</text>
+
+  <rect x="970" y="175" width="850" height="390" class="cardA"/>
+  <text x="1000" y="215" class="cardTitle">2. Component and Module View</text>
+  <text x="1000" y="240" class="cardText">Code-level dependencies between entrypoint, orchestrator, and actors.</text>
+
+  <rect x="1010" y="275" width="180" height="72" class="chip"/>
+  <text x="1025" y="305" class="small">run_pipeline.py</text>
+
+  <rect x="1230" y="275" width="240" height="72" class="chip"/>
+  <text x="1245" y="305" class="small">agents/orchestrator.py</text>
+
+  <rect x="1510" y="275" width="280" height="72" class="chipGPU"/>
+  <text x="1525" y="305" class="small">Ray Actors + Shared LLM</text>
+
+  <line x1="1190" y1="311" x2="1230" y2="311" class="arrow"/>
+  <line x1="1470" y1="311" x2="1510" y2="311" class="arrow"/>
+
+  <rect x="1010" y="385" width="780" height="140" class="chip"/>
+  <text x="1030" y="415" class="small">IngestionAgent | ChunkFilter | DimensionRouter | TechnicalAnalysisAgent | FinBERTBundle | SummarizationAgent | GuardrailAgent | Phi3ModelActor</text>
+  <text x="1030" y="442" class="small">Primary decision: Summarization and Guardrail call one persistent Phi-3 actor handle.</text>
+
+  <rect x="90" y="585" width="580" height="420" class="cardA"/>
+  <text x="120" y="625" class="cardTitle">3. Data Flow (DFD)</text>
+  <text x="120" y="650" class="cardText">From SEC filing and price data to fused recommendation artifact.</text>
+
+  <rect x="120" y="690" width="130" height="56" class="chip"/>
+  <text x="137" y="723" class="small">SEC</text>
+  <rect x="275" y="690" width="130" height="56" class="chip"/>
+  <text x="293" y="723" class="small">Ingestion</text>
+  <rect x="430" y="690" width="130" height="56" class="chip"/>
+  <text x="450" y="723" class="small">ChunkFilter</text>
+
+  <rect x="120" y="790" width="180" height="56" class="chipGPU"/>
+  <text x="138" y="823" class="small">FinBERT Sentiment</text>
+  <rect x="320" y="790" width="180" height="56" class="chipGPU"/>
+  <text x="338" y="823" class="small">Phi-3 Summary</text>
+  <rect x="520" y="790" width="120" height="56" class="chip"/>
+  <text x="536" y="823" class="small">Tech</text>
+
+  <rect x="260" y="890" width="240" height="70" class="chipOut"/>
+  <text x="285" y="926" class="small">Guardrail Fusion -> JSON</text>
+
+  <line x1="250" y1="718" x2="275" y2="718" class="arrow"/>
+  <line x1="405" y1="718" x2="430" y2="718" class="arrow"/>
+  <line x1="490" y1="746" x2="210" y2="790" class="arrow"/>
+  <line x1="500" y1="746" x2="400" y2="790" class="arrow"/>
+  <line x1="560" y1="718" x2="580" y2="790" class="arrow"/>
+  <line x1="210" y1="846" x2="320" y2="890" class="arrow"/>
+  <line x1="410" y1="846" x2="380" y2="890" class="arrow"/>
+  <line x1="580" y1="846" x2="430" y2="890" class="arrow"/>
+
+  <rect x="690" y="585" width="580" height="420" class="cardA"/>
+  <text x="720" y="625" class="cardTitle">4. Sequence (Key Process)</text>
+  <text x="720" y="650" class="cardText">Single ticker execution timeline with synchronization barrier.</text>
+
+  <line x1="760" y1="700" x2="760" y2="960" class="line"/>
+  <line x1="900" y1="700" x2="900" y2="960" class="line"/>
+  <line x1="1040" y1="700" x2="1040" y2="960" class="line"/>
+  <line x1="1180" y1="700" x2="1180" y2="960" class="line"/>
+
+  <text x="734" y="687" class="small">CLI</text>
+  <text x="858" y="687" class="small">Orc</text>
+  <text x="995" y="687" class="small">FinBERT</text>
+  <text x="1135" y="687" class="small">Phi3/Guard</text>
+
+  <line x1="760" y1="730" x2="900" y2="730" class="arrow"/>
+  <line x1="900" y1="760" x2="1040" y2="760" class="arrow"/>
+  <line x1="900" y1="790" x2="1180" y2="790" class="arrow"/>
+  <line x1="1040" y1="820" x2="900" y2="820" class="arrow"/>
+  <line x1="900" y1="850" x2="1040" y2="850" class="arrow"/>
+  <line x1="900" y1="885" x2="1180" y2="885" class="arrow"/>
+  <line x1="1180" y1="920" x2="900" y2="920" class="arrow"/>
+
+  <text x="920" y="751" class="small">start pipeline</text>
+  <text x="930" y="781" class="small">Phase A classify</text>
+  <text x="930" y="811" class="small">parallel technical</text>
+  <text x="930" y="841" class="small">sentiment return</text>
+  <text x="930" y="871" class="small">flush GPU cache</text>
+  <text x="930" y="906" class="small">summarize + arbitrate</text>
+  <text x="930" y="941" class="small">final decision</text>
+
+  <rect x="1290" y="585" width="560" height="420" class="cardA"/>
+  <text x="1320" y="625" class="cardTitle">5. Deployment</text>
+  <text x="1320" y="650" class="cardText">Physical/runtime mapping across the two hosts.</text>
+
+  <rect x="1325" y="690" width="230" height="250" class="chip"/>
+  <text x="1345" y="722" class="cardText">Node A</text>
+  <text x="1345" y="746" class="small">Windows + WSL2</text>
+  <text x="1345" y="768" class="small">Ray Head (6380, 8265)</text>
+  <text x="1345" y="790" class="small">CLI + Orchestrator + CPU agents</text>
+
+  <rect x="1610" y="690" width="210" height="250" class="chipGPU"/>
+  <text x="1630" y="722" class="cardText">Node B</text>
+  <text x="1630" y="746" class="small">Ubuntu + NVIDIA T1000</text>
+  <text x="1630" y="768" class="small">Ray Worker</text>
+  <text x="1630" y="790" class="small">FinBERT + Phi-3 agents</text>
+
+  <line x1="1555" y1="810" x2="1610" y2="810" class="arrow"/>
+  <text x="1558" y="795" class="small">Ray traffic</text>
+
+  <rect x="1368" y="958" width="410" height="36" class="chipOut"/>
+  <text x="1385" y="981" class="small">Persisted outputs: results/*.json and logs/*.json</text>
+</svg>
