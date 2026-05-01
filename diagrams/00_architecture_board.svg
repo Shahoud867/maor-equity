@@ -73,8 +73,12 @@
   <line x1="1470" y1="311" x2="1510" y2="311" class="arrow"/>
 
   <rect x="1010" y="385" width="780" height="140" class="chip"/>
-  <text x="1030" y="415" class="small">IngestionAgent | ChunkFilter | DimensionRouter | TechnicalAnalysisAgent | FinBERTBundle | SummarizationAgent | GuardrailAgent | Phi3ModelActor</text>
-  <text x="1030" y="442" class="small">Primary decision: Summarization and Guardrail call one persistent Phi-3 actor handle.</text>
+  <text x="1030" y="415" class="small">
+    <tspan x="1030" dy="0">IngestionAgent | ChunkFilter | DimensionRouter</tspan>
+    <tspan x="1030" dy="18">TechnicalAnalysisAgent | FinBERTBundle</tspan>
+    <tspan x="1030" dy="18">SummarizationAgent | GuardrailAgent | Phi3ModelActor</tspan>
+  </text>
+  <text x="1030" y="475" class="small">Primary decision: Summarization and Guardrail call one persistent Phi-3 actor handle.</text>
 
   <rect x="90" y="585" width="580" height="420" class="cardA"/>
   <text x="120" y="625" class="cardTitle">3. Data Flow (DFD)</text>
