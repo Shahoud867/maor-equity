@@ -138,9 +138,9 @@
   <rect x="40" y="740" width="540" height="300" class="panel" filter="url(#shadow)"/>
   <text x="68" y="780" class="section">4) Parallelism Timeline (Conceptual)</text>
 
-  <line x1="104" y1="842" x2="484" y2="842" stroke="#4d6f92" stroke-width="3"/>
-  <text x="104" y="830" class="small">t0</text>
-  <text x="454" y="830" class="small">t_end</text>
+  <line x1="104" y1="842" x2="498" y2="842" stroke="#4d6f92" stroke-width="3"/>
+  <text x="104" y="796" class="small">t0</text>
+  <text x="476" y="796" class="small">t_end</text>
 
   <rect x="102" y="804" width="150" height="32" fill="#cfe3ff" stroke="#5d8fbe" rx="8"/>
   <text x="114" y="826" class="small">Ingestion + Chunking</text>
@@ -154,7 +154,8 @@
   <rect x="398" y="804" width="86" height="32" fill="#ffeecf" stroke="#b7881a" rx="8"/>
   <text x="410" y="826" class="small">Flush</text>
 
-  <path d="M484 842 H520" stroke="#4d6f92" stroke-width="3" fill="none" marker-end="url(#arrow)"/>
+  <!-- Arrow curves down from end of Phase A (Flush) to Phase B (Summarization) -->
+  <path d="M484 836 L498 842 L498 862 Q498 878 484 878 L412 878 L412 898" stroke="#4d6f92" stroke-width="2.8" fill="none" marker-end="url(#arrow)"/>
 
   <rect x="102" y="898" width="310" height="34" fill="#ffd9d6" stroke="#c4685b" rx="8"/>
   <text x="114" y="921" class="small">Phi-3 Summarization (dominant stage)</text>
