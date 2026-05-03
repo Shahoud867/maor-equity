@@ -134,3 +134,18 @@
 [2026-04-27 11:39:12] Dynamic ports detected: raylet=0 obj=0
 [2026-04-27 11:39:12] [4/4] Entering monitor loop (Ctrl+C stops monitor, Ray stays running).
 [2026-04-27 11:41:06] SUCCESS: Node B joined. Alive nodes: 2
+[2026-05-03 15:34:02] === Node A startup script begun ===
+[2026-05-03 15:34:02] [1/4] Tailscale check...
+[2026-05-03 15:34:02] Tailscale IP 100.88.99.30 is reachable.
+[2026-05-03 15:34:03] Removed stale GCS portproxy (if any).
+[2026-05-03 15:34:03] Adding 100.88.99.30 as loopback alias...
+[2026-05-03 15:34:11] [2/4] Stopping all Ray processes...
+[2026-05-03 15:34:35] Ray cleanup done.
+[2026-05-03 15:34:35] Port 6380 is free.
+[2026-05-03 15:34:35] [3/4] Starting Ray head on 100.88.99.30:6380...
+[2026-05-03 15:35:26] Ray start command returned OK.
+[2026-05-03 15:35:26] [3b/4] Polling GCS health (timeout: 60s)...
+[2026-05-03 15:35:26] GCS is UP on 100.88.99.30:6380. Raylet processes: 1
+[2026-05-03 15:35:26] Dynamic ports detected: raylet=0 obj=0
+[2026-05-03 15:35:26] [4/4] Entering monitor loop (Ctrl+C stops monitor, Ray stays running).
+[2026-05-03 15:37:16] SUCCESS: Node B joined. Alive nodes: 2

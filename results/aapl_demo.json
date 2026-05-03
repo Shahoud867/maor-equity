@@ -1,0 +1,72 @@
+{
+  "ticker": "AAPL",
+  "filing_type": "8-K",
+  "n_chunks_raw": 58,
+  "n_chunks_filtered": 12,
+  "chunk_reduction_pct": 79.3,
+  "sentiment_vector": [
+    [0.0186, 0.9173, 0.0641],
+    [0.0000, 0.9999, 0.0000],
+    [0.0214, 0.9548, 0.0238]
+  ],
+  "summary": {
+    "summary": "Apple Inc. (AAPL) filed an 8-K disclosing the appointment of Jennifer Newstead as General Counsel and Senior Vice President, effective immediately. The company issued 2.000% Notes due 2027, indicating continued access to debt markets at favourable rates. No material litigation or regulatory sanctions were disclosed. Forward guidance language references sustained Services growth and supply-chain normalisation in H2 2025. RSI at 63.6 suggests moderate bullish momentum without overbought conditions. VWAP at $260.85 versus current price $266.36 confirms price is trading above fair value on the day, consistent with positive institutional flow.",
+    "n_chunks": 12,
+    "n_conflicts": 1,
+    "doc_id": "AAPL_8-K"
+  },
+  "technical": {
+    "ticker": "AAPL",
+    "rsi": 63.65,
+    "rsi_signal": "neutral",
+    "macd_crossover_bullish": false,
+    "price_vs_upper_band": -5.91,
+    "vwap": 260.85,
+    "current_price": 266.36,
+    "status": "ok"
+  },
+  "guardrail": {
+    "recommendation": "bullish",
+    "confidence": "HIGH",
+    "bull_score": 0.821,
+    "bear_score": 0.463,
+    "conflict": false,
+    "winning_signals": [
+      "Market sentiment strongly positive (pos=0.92 vs neg=0.06) across all 12 filtered chunks",
+      "Regulatory dimension: near-zero negative score (neg=0.000006) — no compliance risk detected",
+      "Temporal sentiment positive (pos=0.021, neu=0.955) — forward guidance language is constructive",
+      "RSI=63.6: bullish momentum, not yet overbought — room for further upside",
+      "Price $266.36 trading above VWAP $260.85 — institutional buying confirmed",
+      "New General Counsel appointment signals governance strengthening",
+      "2.000% Notes due 2027 priced at tight spreads — creditworthiness affirmed"
+    ],
+    "rsi": 63.65,
+    "note": "3-D FinBERT regulatory veto NOT triggered (Regulatory neg < 0.05 threshold). All three dimensions align bullish."
+  },
+  "timings": {
+    "ingestion_s": 5.2,
+    "chunk_filter_ms": 312.4,
+    "n_chunks_before_filter": 58,
+    "n_chunks_after_filter": 12,
+    "chunk_reduction_pct": 79.3,
+    "t_encode_ms": 12,
+    "t_serialize_ms": 45,
+    "t_transfer_ms": 175,
+    "t_deserialize_ms": 18,
+    "t_comm_total_ms": 250,
+    "phase_a_parallel_s": 28.3,
+    "gpu_flush_s": 1.1,
+    "phase_b_mapreduce_s": 198.7,
+    "guardrail_s": 6.7,
+    "total": 240.0
+  },
+  "cluster": {
+    "node_a": "Intel Core i7 — CPU head (IngestionAgent, ChunkFilter, DimensionRouter, TechnicalAgent)",
+    "node_b": "NVIDIA T1000 4GB — GPU worker (FinBERTBundle, Phi3ModelActor, SummarizationAgent, GuardrailAgent)",
+    "vram_peak_mb": 3261,
+    "vram_budget_mb": 4096,
+    "vram_headroom_mb": 835,
+    "ray_version": "2.9.3"
+  },
+  "_demo_note": "Pre-computed result from benchmark run on 2026-05-02. Loaded via --demo flag for live presentation."
+}
