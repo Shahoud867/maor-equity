@@ -3,12 +3,12 @@
     "evidence_class": "MEASURED",
     "experiment": "H3_sentiment_dimensionality",
     "schema_version": "1.0",
-    "git_commit": "9112be887495d91fccbf464a2ffcc0e503fb63b3",
+    "git_commit": "91a88097a2850f5a6707b3b5f90fe98a8057065c",
     "git_dirty": true,
-    "timestamp_utc": "2026-08-28T08:20:55+00:00",
+    "timestamp_utc": "2026-08-28T11:56:35+00:00",
     "hostname": "LAPTOP-LLVL1LSJ",
     "username": "shahoud",
-    "command": "cli.py h3-sentiment",
+    "command": "cli.py run-all --no-resume",
     "python_version": "3.11.4",
     "platform": "Windows-10-10.0.26200-SP0",
     "config_sha": "ab1cf2ac7cb4",
@@ -38,7 +38,7 @@
       "regulatory dimension rarely activated",
       "sentence-level granularity mismatch"
     ],
-    "duration_s": 495.41
+    "duration_s": 479.11
   },
   "experiment": "H3_sentiment_dimensionality",
   "dataset": {
@@ -238,5 +238,71 @@
       "notes": "Paired bootstrap 95% CI on the accuracy delta: [0.00, 0.00] pp; paired permutation p=1.0000. A positive point estimate whose CI spans zero is not evidence of improvement."
     }
   ],
-  "wall_clock_s": 495.41
+  "wall_clock_s": 479.11,
+  "execution": {
+    "device": "cpu",
+    "batch_size": 8,
+    "plan": {
+      "label": "h3-sentiment",
+      "fits": true,
+      "device": 0,
+      "free_mb": 0.0,
+      "required_mb": 550.0,
+      "headroom_mb": 0.0,
+      "batch_size": 8,
+      "max_concurrent_models": 1,
+      "execution_adjustments": [
+        "no CUDA device; VRAM planning skipped"
+      ],
+      "blocking_reason": null,
+      "validity_note": "Only execution parameters (batch size, concurrency) are adjusted automatically; these do not change what is computed. Parameters that would change the experiment are never adjusted silently."
+    },
+    "model_release": {
+      "label": "sentiment-bundle",
+      "allocated_freed_mb": 0.0,
+      "reserved_freed_mb": 0.0,
+      "residual_allocated_mb": 0.0,
+      "expected_mb": null,
+      "clean": true,
+      "before": {
+        "device": 0,
+        "available": false,
+        "allocated_mb": 0.0,
+        "reserved_mb": 0.0,
+        "peak_allocated_mb": 0.0,
+        "peak_reserved_mb": 0.0,
+        "free_mb": 0.0,
+        "total_mb": 0.0,
+        "gpu_name": "cpu",
+        "label": "sentiment-bundle:before-release",
+        "used_by_others_mb": 0.0
+      },
+      "after": {
+        "device": 0,
+        "available": false,
+        "allocated_mb": 0.0,
+        "reserved_mb": 0.0,
+        "peak_allocated_mb": 0.0,
+        "peak_reserved_mb": 0.0,
+        "free_mb": 0.0,
+        "total_mb": 0.0,
+        "gpu_name": "cpu",
+        "label": "sentiment-bundle:after",
+        "used_by_others_mb": 0.0
+      }
+    },
+    "gpu_memory_after": {
+      "device": 0,
+      "available": false,
+      "allocated_mb": 0.0,
+      "reserved_mb": 0.0,
+      "peak_allocated_mb": 0.0,
+      "peak_reserved_mb": 0.0,
+      "free_mb": 0.0,
+      "total_mb": 0.0,
+      "gpu_name": "cpu",
+      "label": "h3:after",
+      "used_by_others_mb": 0.0
+    }
+  }
 }

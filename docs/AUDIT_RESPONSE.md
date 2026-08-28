@@ -122,6 +122,67 @@ document either.
 
 ---
 
+## GPU memory hardening (second pass)
+
+A dedicated audit of the GPU-dependent paths, prompted by earlier runs stalling
+on VRAM. Four defects, all found by reading rather than by hitting them — hitting
+them requires the hardware, and three of the four would have made the GPU
+experiments impossible rather than merely slow.
+
+| # | Defect | Consequence | Fix | Verification |
+|---|---|---|---|---|
+| G1 | `unload()` only cleared the owning attribute | A HuggingFace `pipeline`, a returned tensor or an exception traceback keeps the model resident; the next load OOMs for no visible reason | Move to CPU while the reference is valid, drop every reference, collect, empty cache, then **measure** what returned | `test_release_flagged_dirty_when_memory_not_returned` |
+| G2 | The budget released reservations for still-resident models | With `warm_start`, Phase A's reservation was returned while FinBERT stayed loaded, so Phase B reserved the summariser against space that did not exist — 3,350 MB actually resident against a 3,195 MB budget reporting 2,800 MB used | `Pipeline._phase()` holds the reservation while the model is resident; `close()` returns it | `TestVRAMBudget`, and `gpu-audit` now reports tracked vs measured residency |
+| G3 | H1 cached one warm `Pipeline` per condition | Six conditions x ~2.8 GB ≈ 17 GB on a 4 GB card — **the H1 experiment could not have run at all** | Exactly one pipeline resident; the previous is closed before the next condition is built, with memory recorded at each transition | `test_h1_design.py`, plus `gpu_memory.marks` in the H1 payload |
+| G4 | Timeouts were configured but never read | `GPU_RUNBOOK.md` claimed "nothing runs unbounded"; nothing enforced it | `maor.execution.timeouts` enforces `stage_timeout_s` and `model_load_timeout_s`; a timeout is a distinct outcome from a failure | `test_slow_call_raises_timeout`, `test_timeout_is_classified_and_cleanup_still_runs` |
+
+Two further problems surfaced while testing the fixes:
+
+**G5 — the watchdog could not raise its own exception.** `TimeoutGuard` raises
+`TimeoutError_` into the main thread via `PyThreadState_SetAsyncExc`, which
+instantiates the class with no arguments. `__init__` required `label` and
+`seconds`, so every watchdog firing produced a `TypeError` and the timeout was
+misreported as a generic failure. Both arguments now default.
+
+**G6 — global CLI flags only worked before the subcommand.** Every example in
+the GPU runbook is written as `<command> --config configs/gpu_t1000.yaml`, which
+argparse rejected. Worse, the first attempted fix introduced a silent version of
+the bug: a parent parser's defaults are re-applied by the subparser, so
+`--config X <command>` was overwritten with `None` and fell back to the default
+config — the T1000's 0.78 usable fraction silently became 0.85. Fixed with
+`argparse.SUPPRESS`, and both orders are now regression-tested.
+
+### Added infrastructure
+
+- `src/maor/gpu/memory.py` — snapshots tracking **reserved** as well as
+  allocated (reserved is what limits the next allocation), release verification,
+  and a tracker whose `leaked_allocated_mb` makes accumulation across experiments
+  visible as a number.
+- `src/maor/gpu/lifecycle.py` — `ModelRegistry` keyed by `(device, checkpoint)`
+  so duplicate residency is an error rather than an OOM; `model_scope` releasing
+  in `finally`.
+- `src/maor/gpu/limits.py` — pre-flight feasibility. Adjusts batch size and
+  worker concurrency (execution parameters, which do not change what is
+  computed) and refuses to touch sample counts, sequence lengths or quantisation
+  (which do).
+- `src/maor/execution/timeouts.py` — bounded waits, bounded retries, and OOM
+  classification. Retrying an OOM with identical parameters is disabled by
+  default because it fails identically and makes a run look hung.
+- `src/maor/execution/runner.py` — the lifecycle: prepare, validate, execute
+  under deadline, checkpoint, release, verify, next. A failed experiment releases
+  its models and the next still runs; the sequence stops only when continuing
+  would attribute an error to the wrong experiment.
+
+### What this does not establish
+
+The logic is tested; the CUDA behaviour is not. Whether `empty_cache()` actually
+returns the expected memory on a T1000 is unverified until it runs there, and is
+listed as pending. A wedged CUDA call still cannot be interrupted from Python —
+the guarantee is that the process reports which stage overran rather than waiting
+silently, and recovery from that state means restarting the process.
+
+---
+
 ## What is not fixed
 
 - **All GPU-dependent measurements.** H1, H2, VRAM verification and the

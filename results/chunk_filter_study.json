@@ -3,12 +3,12 @@
     "evidence_class": "MEASURED",
     "experiment": "chunk_filter_study",
     "schema_version": "1.0",
-    "git_commit": "9112be887495d91fccbf464a2ffcc0e503fb63b3",
+    "git_commit": "91a88097a2850f5a6707b3b5f90fe98a8057065c",
     "git_dirty": true,
-    "timestamp_utc": "2026-08-28T08:21:56+00:00",
+    "timestamp_utc": "2026-08-28T11:48:26+00:00",
     "hostname": "LAPTOP-LLVL1LSJ",
     "username": "shahoud",
-    "command": "cli.py chunk-filter --n-documents 120",
+    "command": "cli.py run-all --no-resume",
     "python_version": "3.11.4",
     "platform": "Windows-10-10.0.26200-SP0",
     "config_sha": "ab1cf2ac7cb4",
@@ -34,7 +34,7 @@
     },
     "derived_from": [],
     "caveats": [],
-    "duration_s": 23.49
+    "duration_s": 84.69
   },
   "experiment": "chunk_filter_cost_and_coverage",
   "dataset": {
@@ -44,9 +44,7 @@
     "n_malformed_skipped": 0,
     "mean_document_words": 2818.1,
     "mean_reference_words": 42.7,
-    "max_document_words": 8439,
-    "subsampled_to": 120,
-    "subsample_seed": 20260428
+    "max_document_words": 8439
   },
   "chunking": {
     "window_tokens": 512,
@@ -59,375 +57,375 @@
   "cost_coverage_curve": [
     {
       "max_chunks": 4,
-      "n_documents": 120,
-      "mean_chunks_after": 3.99,
+      "n_documents": 495,
+      "mean_chunks_after": 3.98,
       "reduction_pct": {
-        "n": 120,
-        "mean": 86.9215,
+        "n": 495,
+        "mean": 86.0642,
         "median": 88.89,
         "min": 0.0,
         "max": 96.8,
-        "stdev": 9.4875,
-        "cv": 0.1092
+        "stdev": 11.2871,
+        "cv": 0.1311
       },
       "filter_cost_ms": {
-        "n": 120,
-        "mean": 39.3953,
-        "median": 14.1507,
-        "min": 0.0005,
-        "max": 2907.3991,
-        "stdev": 264.1015,
-        "cv": 6.7039
+        "n": 495,
+        "mean": 20.1517,
+        "median": 14.6706,
+        "min": 0.0003,
+        "max": 2517.8003,
+        "stdev": 112.6016,
+        "cv": 5.5877
       },
       "filter_cost_ms_ci": {
-        "point": 14.1507,
-        "lower": 13.5762,
-        "upper": 15.1331,
+        "point": 14.6706,
+        "lower": 14.2353,
+        "upper": 15.0348,
         "confidence": 0.95,
-        "n": 120,
+        "n": 495,
         "method": "percentile-bootstrap-2000-vectorised"
       },
       "vocabulary_retained_pct": {
-        "n": 120,
-        "mean": 60.0196,
-        "median": 59.42,
+        "n": 495,
+        "mean": 60.5143,
+        "median": 57.89,
         "min": 26.95,
         "max": 100.0,
-        "stdev": 13.2517,
-        "cv": 0.2208
+        "stdev": 14.078,
+        "cv": 0.2326
       },
       "document_positions_retained_pct": {
-        "n": 120,
-        "mean": 46.7287,
-        "median": 43.595,
+        "n": 495,
+        "mean": 47.6194,
+        "median": 43.68,
         "min": 15.93,
         "max": 100.0,
-        "stdev": 15.5463,
-        "cv": 0.3327
+        "stdev": 16.7961,
+        "cv": 0.3527
       }
     },
     {
       "max_chunks": 8,
-      "n_documents": 120,
-      "mean_chunks_after": 7.94,
+      "n_documents": 495,
+      "mean_chunks_after": 7.83,
       "reduction_pct": {
-        "n": 120,
-        "mean": 74.8029,
+        "n": 495,
+        "mean": 74.0427,
         "median": 77.78,
         "min": 0.0,
         "max": 93.6,
-        "stdev": 11.952,
-        "cv": 0.1598
+        "stdev": 14.0843,
+        "cv": 0.1902
       },
       "filter_cost_ms": {
-        "n": 120,
-        "mean": 19.9041,
-        "median": 18.6773,
-        "min": 0.0003,
-        "max": 53.968,
-        "stdev": 6.2363,
-        "cv": 0.3133
+        "n": 495,
+        "mean": 19.3929,
+        "median": 19.0087,
+        "min": 0.0002,
+        "max": 43.2488,
+        "stdev": 5.6028,
+        "cv": 0.2889
       },
       "filter_cost_ms_ci": {
-        "point": 18.6773,
-        "lower": 17.8617,
-        "upper": 20.0433,
+        "point": 19.0087,
+        "lower": 18.5299,
+        "upper": 19.4124,
         "confidence": 0.95,
-        "n": 120,
+        "n": 495,
         "method": "percentile-bootstrap-2000-vectorised"
       },
       "vocabulary_retained_pct": {
-        "n": 120,
-        "mean": 78.4667,
-        "median": 76.61,
+        "n": 495,
+        "mean": 78.7027,
+        "median": 77.01,
         "min": 41.25,
         "max": 100.0,
-        "stdev": 12.1568,
-        "cv": 0.1549
+        "stdev": 12.8791,
+        "cv": 0.1636
       },
       "document_positions_retained_pct": {
-        "n": 120,
-        "mean": 70.0665,
-        "median": 68.065,
-        "min": 28.82,
+        "n": 495,
+        "mean": 70.3864,
+        "median": 67.71,
+        "min": 28.28,
         "max": 100.0,
-        "stdev": 16.0031,
-        "cv": 0.2284
+        "stdev": 17.2704,
+        "cv": 0.2454
       }
     },
     {
       "max_chunks": 12,
-      "n_documents": 120,
-      "mean_chunks_after": 11.3,
+      "n_documents": 495,
+      "mean_chunks_after": 11.16,
       "reduction_pct": {
-        "n": 120,
-        "mean": 65.8312,
+        "n": 495,
+        "mean": 64.6621,
         "median": 66.67,
         "min": 0.0,
         "max": 90.4,
-        "stdev": 10.9793,
-        "cv": 0.1668
+        "stdev": 15.2472,
+        "cv": 0.2358
       },
       "filter_cost_ms": {
-        "n": 120,
-        "mean": 24.853,
-        "median": 24.3658,
-        "min": 0.0003,
-        "max": 64.9308,
-        "stdev": 7.7823,
-        "cv": 0.3131
+        "n": 495,
+        "mean": 23.7803,
+        "median": 24.1876,
+        "min": 0.0001,
+        "max": 56.1744,
+        "stdev": 7.4409,
+        "cv": 0.3129
       },
       "filter_cost_ms_ci": {
-        "point": 24.3658,
-        "lower": 22.9767,
-        "upper": 25.429,
+        "point": 24.1876,
+        "lower": 23.8202,
+        "upper": 24.9205,
         "confidence": 0.95,
-        "n": 120,
+        "n": 495,
         "method": "percentile-bootstrap-2000-vectorised"
       },
       "vocabulary_retained_pct": {
-        "n": 120,
-        "mean": 87.9484,
-        "median": 87.225,
-        "min": 59.81,
+        "n": 495,
+        "mean": 87.8414,
+        "median": 87.29,
+        "min": 58.18,
         "max": 100.0,
-        "stdev": 8.9807,
-        "cv": 0.1021
+        "stdev": 9.3834,
+        "cv": 0.1068
       },
       "document_positions_retained_pct": {
-        "n": 120,
-        "mean": 83.7449,
-        "median": 82.975,
-        "min": 48.28,
+        "n": 495,
+        "mean": 83.2758,
+        "median": 82.58,
+        "min": 43.63,
         "max": 100.0,
-        "stdev": 12.3133,
-        "cv": 0.147
+        "stdev": 13.0416,
+        "cv": 0.1566
       }
     },
     {
       "max_chunks": 16,
-      "n_documents": 120,
-      "mean_chunks_after": 13.88,
+      "n_documents": 495,
+      "mean_chunks_after": 13.79,
       "reduction_pct": {
-        "n": 120,
-        "mean": 58.7879,
-        "median": 59.32,
+        "n": 495,
+        "mean": 57.2231,
+        "median": 59.46,
         "min": 0.0,
         "max": 87.2,
-        "stdev": 14.0408,
-        "cv": 0.2388
+        "stdev": 18.1819,
+        "cv": 0.3177
       },
       "filter_cost_ms": {
-        "n": 120,
-        "mean": 28.6439,
-        "median": 28.5485,
-        "min": 0.0004,
-        "max": 92.2735,
-        "stdev": 12.0959,
-        "cv": 0.4223
+        "n": 495,
+        "mean": 26.7781,
+        "median": 28.8238,
+        "min": 0.0001,
+        "max": 76.4718,
+        "stdev": 11.0894,
+        "cv": 0.4141
       },
       "filter_cost_ms_ci": {
-        "point": 28.5485,
-        "lower": 26.7917,
-        "upper": 30.0926,
+        "point": 28.8238,
+        "lower": 27.8853,
+        "upper": 29.7605,
         "confidence": 0.95,
-        "n": 120,
+        "n": 495,
         "method": "percentile-bootstrap-2000-vectorised"
       },
       "vocabulary_retained_pct": {
-        "n": 120,
-        "mean": 94.0209,
-        "median": 96.41,
-        "min": 66.28,
+        "n": 495,
+        "mean": 93.6893,
+        "median": 95.82,
+        "min": 61.15,
         "max": 100.0,
-        "stdev": 6.3807,
-        "cv": 0.0679
+        "stdev": 6.3214,
+        "cv": 0.0675
       },
       "document_positions_retained_pct": {
-        "n": 120,
-        "mean": 92.0677,
-        "median": 95.27,
-        "min": 55.36,
+        "n": 495,
+        "mean": 91.482,
+        "median": 94.76,
+        "min": 46.05,
         "max": 100.0,
-        "stdev": 8.8018,
-        "cv": 0.0956
+        "stdev": 8.8113,
+        "cv": 0.0963
       }
     },
     {
       "max_chunks": 20,
-      "n_documents": 120,
-      "mean_chunks_after": 15.65,
+      "n_documents": 495,
+      "mean_chunks_after": 15.67,
       "reduction_pct": {
-        "n": 120,
-        "mean": 53.0779,
-        "median": 58.235,
+        "n": 495,
+        "mean": 51.6081,
+        "median": 58.33,
         "min": 0.0,
         "max": 84.0,
-        "stdev": 19.2256,
-        "cv": 0.3622
+        "stdev": 21.2108,
+        "cv": 0.411
       },
       "filter_cost_ms": {
-        "n": 120,
-        "mean": 29.515,
-        "median": 29.9068,
-        "min": 0.0003,
-        "max": 63.9705,
-        "stdev": 14.4312,
-        "cv": 0.4889
+        "n": 495,
+        "mean": 28.0486,
+        "median": 29.7708,
+        "min": 0.0001,
+        "max": 93.2708,
+        "stdev": 14.4653,
+        "cv": 0.5157
       },
       "filter_cost_ms_ci": {
-        "point": 29.9068,
-        "lower": 27.6889,
-        "upper": 31.7828,
+        "point": 29.7708,
+        "lower": 28.4191,
+        "upper": 30.9987,
         "confidence": 0.95,
-        "n": 120,
+        "n": 495,
         "method": "percentile-bootstrap-2000-vectorised"
       },
       "vocabulary_retained_pct": {
-        "n": 120,
-        "mean": 96.8773,
-        "median": 98.145,
+        "n": 495,
+        "mean": 96.6764,
+        "median": 97.7,
         "min": 69.74,
         "max": 100.0,
-        "stdev": 4.5583,
-        "cv": 0.0471
+        "stdev": 3.9905,
+        "cv": 0.0413
       },
       "document_positions_retained_pct": {
-        "n": 120,
-        "mean": 96.0127,
-        "median": 97.545,
+        "n": 495,
+        "mean": 95.6629,
+        "median": 97.17,
         "min": 60.67,
         "max": 100.0,
-        "stdev": 6.1662,
-        "cv": 0.0642
+        "stdev": 5.5888,
+        "cv": 0.0584
       }
     },
     {
       "max_chunks": 32,
-      "n_documents": 120,
-      "mean_chunks_after": 20.73,
+      "n_documents": 495,
+      "mean_chunks_after": 20.83,
       "reduction_pct": {
-        "n": 120,
-        "mean": 36.0,
+        "n": 495,
+        "mean": 34.3853,
         "median": 55.56,
         "min": 0.0,
         "max": 74.4,
-        "stdev": 29.1359,
-        "cv": 0.8093
+        "stdev": 29.1697,
+        "cv": 0.8483
       },
       "filter_cost_ms": {
-        "n": 120,
-        "mean": 24.3533,
-        "median": 29.8671,
-        "min": 0.0003,
-        "max": 86.5117,
-        "stdev": 22.1933,
-        "cv": 0.9113
+        "n": 495,
+        "mean": 23.6981,
+        "median": 29.2716,
+        "min": 0.0001,
+        "max": 82.6549,
+        "stdev": 21.9833,
+        "cv": 0.9276
       },
       "filter_cost_ms_ci": {
-        "point": 29.8671,
-        "lower": 26.5989,
-        "upper": 32.1148,
+        "point": 29.2716,
+        "lower": 27.8614,
+        "upper": 30.7626,
         "confidence": 0.95,
-        "n": 120,
+        "n": 495,
         "method": "percentile-bootstrap-2000-vectorised"
       },
       "vocabulary_retained_pct": {
-        "n": 120,
-        "mean": 98.665,
-        "median": 99.915,
+        "n": 495,
+        "mean": 98.7876,
+        "median": 100.0,
         "min": 86.57,
         "max": 100.0,
-        "stdev": 2.0514,
-        "cv": 0.0208
+        "stdev": 1.718,
+        "cv": 0.0174
       },
       "document_positions_retained_pct": {
-        "n": 120,
-        "mean": 98.4858,
-        "median": 99.75,
+        "n": 495,
+        "mean": 98.5706,
+        "median": 100.0,
         "min": 81.91,
         "max": 100.0,
-        "stdev": 2.434,
-        "cv": 0.0247
+        "stdev": 2.0509,
+        "cv": 0.0208
       }
     }
   ],
   "summary": {
-    "n_documents": 120,
+    "n_documents": 495,
     "chunks_per_document": {
-      "n": 120,
-      "mean": 37.5833,
-      "median": 36.0,
-      "min": 3,
+      "n": 495,
+      "mean": 37.5313,
+      "median": 36,
+      "min": 1,
       "max": 125,
-      "stdev": 16.6186,
-      "cv": 0.4422
+      "stdev": 17.0318,
+      "cv": 0.4538
     },
     "words_per_document": {
-      "n": 120,
-      "mean": 2823.175,
-      "median": 2727.0,
-      "min": 579,
+      "n": 495,
+      "mean": 2818.0828,
+      "median": 2728,
+      "min": 455,
       "max": 8439,
-      "stdev": 1064.141,
-      "cv": 0.3769
+      "stdev": 1089.511,
+      "cv": 0.3866
     },
     "filter_cost_ms_overall": {
-      "n": 720,
-      "mean": 27.7775,
-      "median": 22.9483,
-      "min": 0.0003,
-      "max": 2907.3991,
-      "stdev": 108.3404,
-      "cv": 3.9003
+      "n": 2970,
+      "mean": 23.6416,
+      "median": 22.3675,
+      "min": 0.0001,
+      "max": 2517.8003,
+      "stdev": 47.6411,
+      "cv": 2.0151
     },
     "default_cap_row": {
       "max_chunks": 12,
-      "n_documents": 120,
-      "mean_chunks_after": 11.3,
+      "n_documents": 495,
+      "mean_chunks_after": 11.16,
       "reduction_pct": {
-        "n": 120,
-        "mean": 65.8312,
+        "n": 495,
+        "mean": 64.6621,
         "median": 66.67,
         "min": 0.0,
         "max": 90.4,
-        "stdev": 10.9793,
-        "cv": 0.1668
+        "stdev": 15.2472,
+        "cv": 0.2358
       },
       "filter_cost_ms": {
-        "n": 120,
-        "mean": 24.853,
-        "median": 24.3658,
-        "min": 0.0003,
-        "max": 64.9308,
-        "stdev": 7.7823,
-        "cv": 0.3131
+        "n": 495,
+        "mean": 23.7803,
+        "median": 24.1876,
+        "min": 0.0001,
+        "max": 56.1744,
+        "stdev": 7.4409,
+        "cv": 0.3129
       },
       "filter_cost_ms_ci": {
-        "point": 24.3658,
-        "lower": 22.9767,
-        "upper": 25.429,
+        "point": 24.1876,
+        "lower": 23.8202,
+        "upper": 24.9205,
         "confidence": 0.95,
-        "n": 120,
+        "n": 495,
         "method": "percentile-bootstrap-2000-vectorised"
       },
       "vocabulary_retained_pct": {
-        "n": 120,
-        "mean": 87.9484,
-        "median": 87.225,
-        "min": 59.81,
+        "n": 495,
+        "mean": 87.8414,
+        "median": 87.29,
+        "min": 58.18,
         "max": 100.0,
-        "stdev": 8.9807,
-        "cv": 0.1021
+        "stdev": 9.3834,
+        "cv": 0.1068
       },
       "document_positions_retained_pct": {
-        "n": 120,
-        "mean": 83.7449,
-        "median": 82.975,
-        "min": 48.28,
+        "n": 495,
+        "mean": 83.2758,
+        "median": 82.58,
+        "min": 43.63,
         "max": 100.0,
-        "stdev": 12.3133,
-        "cv": 0.147
+        "stdev": 13.0416,
+        "cv": 0.1566
       }
     }
   },
@@ -435,7 +433,7 @@
     "status": "NOT COMPUTED \u2014 requires a measured per-chunk generation cost",
     "explanation": "Saved GPU time = (chunks_removed) x (seconds per chunk). The second factor must come from a measured Phi-3-mini generation cost on the target GPU. The original analysis assumed 15 s/chunk and reported 690 s and 1,575 s saved as if measured.",
     "coefficients_available": {
-      "mean_chunks_removed_at_cap_12": 26.28
+      "mean_chunks_removed_at_cap_12": 26.37
     },
     "how_to_complete": "Run `maor.cli h1-latency` on the GPU node to obtain measured seconds-per-chunk, then multiply."
   },
@@ -443,5 +441,5 @@
     "filter_cost": "Measured wall-clock cost of the filter itself, to replace the unmeasured '~80 ms' figure in the paper.",
     "coverage": "Vocabulary and document-position retention quantify what the filter discards. High retention supports the claim that removed chunks were near-duplicates created by the 87.5% window overlap; low retention would mean the filter is dropping content and the H2 quality comparison is confounded."
   },
-  "wall_clock_s": 23.49
+  "wall_clock_s": 84.69
 }

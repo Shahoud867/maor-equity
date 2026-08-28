@@ -137,6 +137,7 @@ card.
 | Command | Needs GPU | What it produces |
 |---|---|---|
 | `doctor` | no | Environment, dependency and data check |
+| `gpu-audit` | no | Device memory, model residency, workload feasibility |
 | `h3-sentiment` | no | H3: multi-dimensional vs scalar sentiment |
 | `chunk-filter` | no | ChunkFilter cost and coverage curve |
 | `smoke` | either | End-to-end wiring check |
@@ -144,13 +145,33 @@ card.
 | `vram-verify` | yes | Measured VRAM trace against the budget |
 | `h2-summarisation` | yes | H2: map-reduce vs single-pass on ECTSum |
 | `h1-latency` | yes | H1: 2×2 factorial latency study |
+| `run-all` | either | The full sequence, with cleanup between experiments |
 | `verify-cluster` | no | Ray cluster health |
 | `report` | no | Regenerates tables and `RESULTS_STATUS.md` |
 
-GPU commands detect a missing CUDA device and explain how to run them rather than
-failing obscurely or producing meaningless CPU numbers.
+Global flags (`--config`, `--set`, `-v`) work before or after the subcommand.
+
+GPU commands detect a missing CUDA device and report `BLOCKED` — implemented but
+unrunnable here — rather than failing obscurely or producing CPU numbers that
+would not transfer.
 
 Full instructions for the GPU node: [`docs/GPU_RUNBOOK.md`](docs/GPU_RUNBOOK.md).
+
+### GPU memory is managed, not hoped for
+
+Models load only when needed and are released in `finally`, so a failed or
+timed-out experiment cannot leave weights resident for the next one. Release is
+verified by measurement — moving to CPU, dropping references, emptying the cache,
+then checking what actually came back — because clearing an attribute is not a
+release when a pipeline, a returned tensor or a traceback still holds the model.
+
+A registry refuses to load the same checkpoint twice on one device, the budget
+holds a reservation for as long as the model is resident, and every experiment
+records peak and residual memory so a leak shows up as a number rather than as a
+mysterious out-of-memory error three experiments later.
+
+See [`docs/VRAM_LIFECYCLE.md`](docs/VRAM_LIFECYCLE.md) for what is guaranteed and,
+just as importantly, what is not.
 
 ---
 

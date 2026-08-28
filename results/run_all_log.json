@@ -1,0 +1,120 @@
+{
+  "_provenance": {
+    "evidence_class": "MEASURED",
+    "experiment": "experiment_sequence",
+    "schema_version": "1.0",
+    "git_commit": "91a88097a2850f5a6707b3b5f90fe98a8057065c",
+    "git_dirty": true,
+    "timestamp_utc": "2026-08-28T11:58:46+00:00",
+    "hostname": "LAPTOP-LLVL1LSJ",
+    "username": "shahoud",
+    "command": "cli.py run-all --only vram_verification h2_summarisation h1_latency",
+    "python_version": "3.11.4",
+    "platform": "Windows-10-10.0.26200-SP0",
+    "config_sha": "ab1cf2ac7cb4",
+    "seed": 20260428,
+    "hardware": {
+      "has_cuda": false,
+      "gpus": [],
+      "cpu_count": 12,
+      "total_ram_mb": 20151.4,
+      "platform": "Windows-10-10.0.26200-SP0",
+      "torch_version": "2.11.0+cpu",
+      "cuda_version": null
+    },
+    "library_versions": {
+      "torch": "2.11.0+cpu",
+      "transformers": "5.16.1",
+      "numpy": "2.4.4",
+      "sklearn": "1.8.0",
+      "scipy": "1.17.1",
+      "rouge_score": "unknown",
+      "datasets": "5.0.1",
+      "ray": "not-installed"
+    },
+    "derived_from": [],
+    "caveats": [
+      "Execution log, not an experimental result."
+    ],
+    "duration_s": null
+  },
+  "n_experiments": 3,
+  "by_status": {
+    "BLOCKED": 3
+  },
+  "all_runnable_completed": true,
+  "all_completed": false,
+  "n_blocked": 3,
+  "blocked_experiments": [
+    "vram_verification",
+    "h2_summarisation",
+    "h1_latency"
+  ],
+  "any_dirty_cleanup": false,
+  "peak_allocated_mb": 0.0,
+  "outcomes": [
+    {
+      "experiment": "vram_verification",
+      "status": "BLOCKED",
+      "started_utc": "2026-08-28T11:58:46+00:00",
+      "duration_s": 0.07,
+      "gpu_name": "cpu",
+      "total_vram_mb": 0.0,
+      "allocated_before_mb": 0.0,
+      "allocated_after_mb": 0.0,
+      "reserved_after_mb": 0.0,
+      "peak_allocated_mb": 0.0,
+      "peak_reserved_mb": 0.0,
+      "residual_mb": 0.0,
+      "cleanup_clean": true,
+      "batch_size": null,
+      "concurrency": null,
+      "failure_reason": "requires a CUDA device; none available. The experiment is implemented and will run unchanged on a GPU machine.",
+      "failure_type": "NoCUDADevice",
+      "result_path": null,
+      "memory_trace": {}
+    },
+    {
+      "experiment": "h2_summarisation",
+      "status": "BLOCKED",
+      "started_utc": "2026-08-28T11:58:46+00:00",
+      "duration_s": 0.07,
+      "gpu_name": "cpu",
+      "total_vram_mb": 0.0,
+      "allocated_before_mb": 0.0,
+      "allocated_after_mb": 0.0,
+      "reserved_after_mb": 0.0,
+      "peak_allocated_mb": 0.0,
+      "peak_reserved_mb": 0.0,
+      "residual_mb": 0.0,
+      "cleanup_clean": true,
+      "batch_size": null,
+      "concurrency": null,
+      "failure_reason": "requires a CUDA device; none available. The experiment is implemented and will run unchanged on a GPU machine.",
+      "failure_type": "NoCUDADevice",
+      "result_path": null,
+      "memory_trace": {}
+    },
+    {
+      "experiment": "h1_latency",
+      "status": "BLOCKED",
+      "started_utc": "2026-08-28T11:58:46+00:00",
+      "duration_s": 0.07,
+      "gpu_name": "cpu",
+      "total_vram_mb": 0.0,
+      "allocated_before_mb": 0.0,
+      "allocated_after_mb": 0.0,
+      "reserved_after_mb": 0.0,
+      "peak_allocated_mb": 0.0,
+      "peak_reserved_mb": 0.0,
+      "residual_mb": 0.0,
+      "cleanup_clean": true,
+      "batch_size": null,
+      "concurrency": null,
+      "failure_reason": "requires a CUDA device; none available. The experiment is implemented and will run unchanged on a GPU machine.",
+      "failure_type": "NoCUDADevice",
+      "result_path": null,
+      "memory_trace": {}
+    }
+  ]
+}

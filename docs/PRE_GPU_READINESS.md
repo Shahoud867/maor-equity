@@ -10,16 +10,18 @@ command or test that established it, and was actually run on this machine
 
 | Requirement | Status | Evidence |
 |---|---|---|
-| Codebase complete | Verified | 16 modules under `src/maor/`; `python -m maor.cli --help` lists 10 commands, all wired |
-| Architecture implemented | Verified | One pipeline path serves both arms (`pipeline/orchestrator.py`); phase serialisation enforced by `VRAMBudget.phase()` |
+| Codebase complete | Verified | 22 modules under `src/maor/`; `python -m maor.cli --help` lists 12 commands, all wired and handler-checked by test |
+| Architecture implemented | Verified | One pipeline path serves both arms (`pipeline/orchestrator.py`); phase serialisation enforced, and reservations now held for as long as models are resident |
 | Data pipeline ready | Verified | `doctor` reports ECTSum available (495 records) and PhraseBank reachable; both loaders verify what they loaded |
-| Experiments executable | Partly verified | H3 and chunk-filter **executed on real data**; H1/H2/VRAM implemented and unit-tested against injected executors, unrun (no CUDA) |
-| Evaluation pipeline ready | Verified | 67 tests pass; ROUGE/BERTScore, bootstrap CIs, paired permutation tests all exercised |
-| VRAM safeguards implemented | Verified | `TestVRAMBudget` (6 tests): over-budget refused pre-allocation, duplicate load refused, phase context releases, budget scales with the card |
-| GPU configuration ready | Verified | `configs/gpu_t1000.yaml` loads and validates; `usable_fraction` 0.78 encodes measured overhead |
-| Smoke tests ready | Verified | `maor.cli smoke` implemented with `configs/smoke.yaml`; CPU path exercised through sentiment, GPU path deferred |
-| Documentation complete | Verified | Evidence policy, GPU runbook, audit response, paper notes, results status |
-| Reproducibility setup complete | Verified | Provenance embedded in every result; integration check confirms 2/2 results load and 13/13 archived files refuse |
+| Experiments executable | Partly verified | chunk-filter and H3 **executed on real data** via `run-all`; H1/H2/VRAM implemented and unit-tested against injected executors, reported BLOCKED off-GPU |
+| Evaluation pipeline ready | Verified | 132 tests pass; ROUGE/BERTScore, bootstrap CIs, paired permutation tests all exercised |
+| VRAM safeguards implemented | Verified | Budget refuses over-allocation pre-load and duplicate residency; `ModelRegistry` tracks actual residency; release is measured, not assumed. See `docs/VRAM_LIFECYCLE.md` |
+| GPU memory lifecycle | Verified (logic) | `tests/test_gpu_lifecycle.py` — 43 tests covering release-on-failure, duplicate refusal, leak detection, bounded retries, OOM classification. **Whether CUDA returns the memory is unverified until it runs on a GPU** |
+| Failure isolation | Verified | `ExperimentRunner` — a failed, timed-out or OOM experiment releases its models and the next still runs |
+| GPU configuration ready | Verified | `configs/gpu_t1000.yaml` validates; at `usable_fraction` 0.78 the audit correctly reports co-residence does **not** fit (3,350 of 3,195 MB), so phase serialisation is genuinely required |
+| Smoke tests ready | Verified | `maor.cli smoke` with `configs/smoke.yaml`; CPU path exercised through sentiment, GPU path deferred |
+| Documentation complete | Verified | Evidence policy, GPU runbook, VRAM lifecycle, audit response, paper notes, results status |
+| Reproducibility setup complete | Verified | Provenance embedded in every result; integration check confirms results load and archived files refuse |
 | Publication artifacts prepared | Partly verified | `paper/tables/h3_sentiment.tex` and `chunk_filter_curve.csv` generated from measured results; figures blocked by a broken local matplotlib |
 
 ---
@@ -93,16 +95,29 @@ python -m maor.cli smoke --config configs/smoke.yaml
 # 7. VRAM verification. Check declared_vs_measured; correct the config if it drifts.
 python -m maor.cli vram-verify --config configs/gpu_t1000.yaml
 
-# 8. H2, small first — inspect n_scaffolding_trimmed before committing hours
+# 8. Everything else, unattended, with cleanup between experiments.
+#    Resumes from checkpoint if interrupted.
+python -m maor.cli run-all --config configs/gpu_t1000.yaml
+
+# 9. Regenerate tables and the status page
+python -m maor.cli report
+```
+
+Step 8 runs H2 and H1 in sequence. To do them individually instead — worth it
+the first time, so you can inspect H2's `n_scaffolding_trimmed` on a few samples
+before committing hours:
+
+```bash
 python -m maor.cli h2-summarisation --config configs/gpu_t1000.yaml --n-samples 5
 python -m maor.cli h2-summarisation --config configs/gpu_t1000.yaml --n-samples 100
-
-# 9. H1 with the full 2x2 ablation
 python -m maor.cli h1-latency --config configs/gpu_t1000.yaml \
     --tickers AAPL MSFT GOOGL --repeats 5 --ablation full
+```
 
-# 10. Regenerate tables and the status page
-python -m maor.cli report
+If anything fails on memory:
+
+```bash
+python -m maor.cli gpu-audit --config configs/gpu_t1000.yaml
 ```
 
 Optional, after the above:

@@ -211,6 +211,56 @@ python -m maor.cli quantisation-sweep --config configs/gpu_t1000.yaml
 
 ---
 
+## Steps 6–9, the short version
+
+Everything from VRAM verification onward can run as one unattended sequence:
+
+```bash
+python -m maor.cli run-all --config configs/gpu_t1000.yaml
+```
+
+Each experiment gets a fresh device state, a deadline, and verified cleanup
+before the next starts. A failure in one does not stop the others — it is
+recorded and the sequence continues. Progress is logged as it goes.
+
+Two properties worth knowing:
+
+- **It resumes.** Progress is checkpointed to
+  `results/run_all_checkpoint.json`, so re-running after an interruption picks up
+  where it stopped rather than repeating hours of work. `--no-resume` starts over.
+- **It stops when continuing would mislead.** If cleanup leaves more than 256 MB
+  allocated, the sequence halts rather than producing an out-of-memory error
+  attributed to the wrong experiment. Restart the process — a CUDA context cannot
+  be reset in place.
+
+Run part of it with `--only`:
+
+```bash
+python -m maor.cli run-all --only h2_summarisation --config configs/gpu_t1000.yaml
+```
+
+The step-by-step form above is still worth using the first time, because it lets
+you inspect `declared_vs_measured` after VRAM verification before committing
+hours to H2.
+
+---
+
+## Diagnosing a memory failure
+
+```bash
+python -m maor.cli gpu-audit --config configs/gpu_t1000.yaml
+```
+
+Reports total, free, allocated and reserved memory, what this process holds, and
+whether each workload fits. The line to check first is **other processes**: if
+another program holds VRAM, it is unavailable to this run regardless of what the
+budget says, and that is the most common cause of an allocation failing while
+the budget claims it should fit.
+
+`docs/VRAM_LIFECYCLE.md` has the full failure-mode table.
+
+---
+
 ## Step 10 — Collect
 
 ```bash
