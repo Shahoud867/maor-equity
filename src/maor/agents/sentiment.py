@@ -487,12 +487,56 @@ class SentimentBundle:
             for spec in self.specs
         }
 
-    def unload(self) -> None:
+    def unload(self, *, strict: bool = False) -> Any:
+        """Release every loaded checkpoint and verify the memory came back.
+
+        A HuggingFace ``pipeline`` holds both the model and the tokenizer, so
+        clearing the dictionaries is not enough on its own — the underlying
+        modules are moved off the device first, while the references are still
+        valid.
+        """
+        from ..gpu.lifecycle import ModelRegistry, release_torch_module
+
+        pipelines = list(self._pipelines.values())
+        checkpoints = list(self._loaded_checkpoints.items())
         self._pipelines.clear()
         self._loaded_checkpoints.clear()
-        from ..hardware import release_vram
 
-        release_vram()
+        if not pipelines and not checkpoints:
+            return None
+
+        device_index = 0 if self.device == "cpu" else int(str(self.device).split(":")[-1] or 0)
+        registry = ModelRegistry.instance()
+        for checkpoint, _pipe in checkpoints:
+            registry.unregister(checkpoint, device_index)
+
+        objects: list[Any] = list(pipelines)
+        for _checkpoint, pipe in checkpoints:
+            objects.append(pipe)
+            objects.append(getattr(pipe, "model", None))
+            objects.append(getattr(pipe, "tokenizer", None))
+
+        verification = release_torch_module(
+            "sentiment-bundle",
+            *objects,
+            device=device_index,
+            strict=strict,
+        )
+        log.info(
+            "unloaded sentiment bundle (%d checkpoint(s)): freed %.0f MB, "
+            "%.0f MB still held",
+            len(checkpoints),
+            verification.allocated_freed_mb,
+            verification.residual_mb,
+        )
+        return verification
+
+    def __enter__(self) -> "SentimentBundle":
+        return self.load()
+
+    def __exit__(self, *exc: object) -> bool:
+        self.unload()
+        return False
 
 
 def build_matrix(results: dict[str, DimensionResult]) -> SentimentMatrix:

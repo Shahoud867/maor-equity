@@ -75,6 +75,7 @@ class SummarisationModel:
         trust_remote_code: bool = True,
         do_sample: bool = False,
         temperature: float = 0.0,
+        estimated_vram_mb: float = 2800.0,
     ) -> None:
         self.checkpoint = checkpoint
         self.device = device
@@ -83,6 +84,7 @@ class SummarisationModel:
         self.trust_remote_code = trust_remote_code
         self.do_sample = do_sample
         self.temperature = temperature
+        self.estimated_vram_mb = estimated_vram_mb
         self._model: Any = None
         self._tokenizer: Any = None
 
@@ -130,6 +132,23 @@ class SummarisationModel:
 
         self._model = AutoModelForCausalLM.from_pretrained(self.checkpoint, **kwargs)
         self._model.eval()
+
+        # Record residency so a second load of the same checkpoint is refused
+        # rather than silently doubling a ~2.7 GB footprint. allow_shared is set
+        # because the guardrail deliberately uses this same instance.
+        if self.device != "cpu":
+            from ..gpu.lifecycle import ModelRegistry
+
+            device_index = int(str(self.device).split(":")[-1] or 0)
+            ModelRegistry.instance().register(
+                label="summariser",
+                checkpoint=self.checkpoint,
+                device=device_index,
+                estimated_mb=self.estimated_vram_mb,
+                obj=self._model,
+                allow_shared=True,
+            )
+
         log.info(
             "loaded %s (device=%s, quantisation=%s)",
             self.checkpoint,
@@ -188,12 +207,47 @@ class SummarisationModel:
             truncated_input=truncated,
         )
 
-    def unload(self) -> None:
+    def unload(self, *, strict: bool = False) -> Any:
+        """Release the model from the device and verify the memory came back.
+
+        Clearing the attributes is not sufficient on its own: the model is moved
+        to CPU first so the device memory is freed while the reference is still
+        valid, rather than depending on the collector to reach it later. Returns
+        the verification so a caller can record whether the release worked.
+        """
+        from ..gpu.lifecycle import ModelRegistry, release_torch_module
+
+        model, tokenizer = self._model, self._tokenizer
         self._model = None
         self._tokenizer = None
-        from ..hardware import release_vram
 
-        release_vram()
+        if model is None and tokenizer is None:
+            return None
+
+        device_index = 0 if self.device == "cpu" else int(str(self.device).split(":")[-1] or 0)
+        ModelRegistry.instance().unregister(self.checkpoint, device_index)
+
+        verification = release_torch_module(
+            f"summariser[{self.checkpoint}]",
+            model,
+            tokenizer,
+            device=device_index,
+            strict=strict,
+        )
+        log.info(
+            "unloaded %s: freed %.0f MB allocated, %.0f MB still held",
+            self.checkpoint,
+            verification.allocated_freed_mb,
+            verification.residual_mb,
+        )
+        return verification
+
+    def __enter__(self) -> "SummarisationModel":
+        return self.load()
+
+    def __exit__(self, *exc: object) -> bool:
+        self.unload()
+        return False
 
 
 MAP_PROMPT = (

@@ -14,6 +14,7 @@ summariser, so peak residency is ``max(A, B)`` rather than ``A + B``.
 from __future__ import annotations
 
 import logging
+from contextlib import contextmanager
 from dataclasses import dataclass, field
 from typing import Any, Sequence
 
@@ -21,6 +22,7 @@ from ..agents.guardrail import GuardrailAgent
 from ..agents.sentiment import DimensionRouter, SentimentBundle, build_matrix
 from ..agents.summarisation import MapReduceSummariser, SummarisationModel
 from ..data.chunking import ChunkFilter, chunk_document
+from ..execution.timeouts import run_with_timeout
 from ..hardware import VRAMBudget, release_vram
 from .instrumentation import StageRecorder
 
@@ -67,12 +69,30 @@ class Pipeline:
         device: str = "cpu",
         warm_start: bool = True,
         filter_enabled: bool = True,
+        distributed: bool = False,
     ) -> None:
         self.config = config
         self.device = device
         self.warm_start = warm_start
         self.filter_enabled = filter_enabled
+        self.distributed = distributed
         self.budget = budget or VRAMBudget(total_mb=0.0)
+
+        # Refuse rather than silently run single-node work under a "distributed"
+        # label. A factor that does not change execution produces a contrast of
+        # approximately zero, which reads as "distribution does not help" when in
+        # fact nothing distributed was ever run — a fabricated null result.
+        if distributed and config.execution.mode != "ray":
+            raise NotImplementedError(
+                "distributed=True requires execution.mode='ray', and the Ray "
+                "execution path is not implemented in this codebase. Running "
+                "single-node work under a 'distributed' label would produce a "
+                "contrast of ~0 that looks like a measured finding.\n"
+                "Either implement the Ray path, or run H1 with "
+                "--ablation local, which crosses the factors that are actually "
+                "implemented (chunk filter x warm start) and reports the "
+                "distribution factor as not measured."
+            )
 
         self.router = DimensionRouter()
         self.chunk_filter = ChunkFilter(
@@ -84,6 +104,8 @@ class Pipeline:
 
         self._sentiment: SentimentBundle | None = None
         self._summariser: SummarisationModel | None = None
+        # Reservations held for models that outlive their phase (warm start).
+        self._held_reservations: set[str] = set()
 
     # -- model lifecycle -------------------------------------------------
 
@@ -97,7 +119,12 @@ class Pipeline:
             quantisation=self.config.models.sentiment_quantisation,
             batch_size=self.config.models.sentiment_batch_size,
             max_length=self.config.models.sentiment_max_length,
-        ).load()
+        )
+        run_with_timeout(
+            bundle.load,
+            self.config.execution.model_load_timeout_s,
+            label="sentiment model load",
+        )
         if self.warm_start:
             self._sentiment = bundle
         return bundle
@@ -113,19 +140,77 @@ class Pipeline:
             trust_remote_code=self.config.models.trust_remote_code,
             do_sample=self.config.models.do_sample,
             temperature=self.config.models.temperature,
-        ).load()
+            estimated_vram_mb=self.config.models.summarizer_estimated_vram_mb,
+        )
+        run_with_timeout(
+            model.load,
+            self.config.execution.model_load_timeout_s,
+            label="summariser model load",
+        )
         if self.warm_start:
             self._summariser = model
         return model
 
-    def close(self) -> None:
-        if self._sentiment is not None:
-            self._sentiment.unload()
-            self._sentiment = None
-        if self._summariser is not None:
-            self._summariser.unload()
-            self._summariser = None
+    @contextmanager
+    def _phase(self, label: str, estimated_mb: float, *, keep_resident: bool):
+        """Reserve budget for a phase, holding the reservation while resident.
+
+        The distinction that matters: with ``warm_start`` the model outlives the
+        phase, so the reservation must outlive it too. Releasing a reservation
+        for memory that is still occupied lets the next phase allocate against
+        space that does not exist — a budget check that passes and an allocation
+        that fails.
+        """
+        already_held = label in self._held_reservations
+        if not already_held:
+            self.budget.reserve(label, estimated_mb)
+        try:
+            yield
+        finally:
+            if keep_resident:
+                self._held_reservations.add(label)
+            else:
+                self._held_reservations.discard(label)
+                self.budget.release(label)
+                release_vram()
+
+    def close(self) -> dict[str, Any]:
+        """Release every model and every reservation this pipeline holds.
+
+        Safe to call twice, and safe to call after a failure — which is why the
+        experiment runner can call it in ``finally`` without needing to know how
+        far the run got.
+        """
+        verifications: list[Any] = []
+        for attr in ("_sentiment", "_summariser"):
+            model = getattr(self, attr, None)
+            if model is None:
+                continue
+            try:
+                verification = model.unload()
+                if verification is not None:
+                    verifications.append(verification.to_dict())
+            except Exception as exc:
+                log.warning("error unloading %s: %s", attr, exc)
+            finally:
+                setattr(self, attr, None)
+
+        # Reservations outlive their phase under warm start, so they are only
+        # returned here. Leaving them held would shrink the budget for the next
+        # pipeline by the size of models that are no longer resident.
+        for label in list(self._held_reservations):
+            self.budget.release(label)
+        self._held_reservations.clear()
+
         release_vram()
+        return {"release_verifications": verifications}
+
+    def __enter__(self) -> "Pipeline":
+        return self
+
+    def __exit__(self, *exc: object) -> bool:
+        self.close()
+        return False
 
     # -- execution -------------------------------------------------------
 
@@ -171,8 +256,10 @@ class Pipeline:
 
         # ---- Phase A: sentiment -----------------------------------------
         # Reserved and released before Phase B loads, so peak is max(A, B).
-        with self.budget.phase(
-            f"sentiment[{ticker}]", self.config.models.sentiment_estimated_vram_mb
+        with self._phase(
+            "sentiment",
+            self.config.models.sentiment_estimated_vram_mb,
+            keep_resident=self.warm_start,
         ):
             with rec.stage("sentiment_load", kind="model_load"):
                 bundle = self._get_sentiment()
@@ -194,8 +281,10 @@ class Pipeline:
                 bundle.unload()
 
         # ---- Phase B: summarisation + guardrail --------------------------
-        with self.budget.phase(
-            f"summariser[{ticker}]", self.config.models.summarizer_estimated_vram_mb
+        with self._phase(
+            "summariser",
+            self.config.models.summarizer_estimated_vram_mb,
+            keep_resident=self.warm_start,
         ):
             with rec.stage("summariser_load", kind="model_load"):
                 model = self._get_summariser()
