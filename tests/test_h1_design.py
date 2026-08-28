@@ -206,3 +206,55 @@ class TestHypothesisReporting:
         )
         interp = analysis["statistics"]["sample_size_interpretation"]
         assert interp["evidence_level"] in ("anecdote", "indicative", "weak", "adequate")
+
+
+class TestDistributedFactorGuard:
+    """A factor that does not change execution must not be measured.
+
+    `Condition(distributed=True)` and `distributed=False` ran identical code
+    because Pipeline never read the flag. The resulting contrast would be ~0 and
+    would read as "distribution does not help" when nothing distributed had run.
+    """
+
+    def test_local_conditions_exclude_the_distribution_factor(self):
+        from maor.evaluation.h1_latency import local_conditions
+
+        conditions = local_conditions()
+        assert all(not c.distributed for c in conditions)
+        assert {c.name for c in conditions} == {
+            "serial_filter_warm",
+            "serial_nofilter_warm",
+            "serial_filter_cold",
+        }
+
+    def test_local_conditions_still_cross_implemented_factors(self):
+        from maor.evaluation.h1_latency import local_conditions
+
+        conditions = local_conditions()
+        assert {c.filter_enabled for c in conditions} == {True, False}
+        assert {c.warm_start for c in conditions} == {True, False}
+
+    def test_pipeline_refuses_distributed_without_a_ray_path(self):
+        from maor.config import Config
+        from maor.pipeline.orchestrator import Pipeline
+
+        cfg = Config.load()
+        assert cfg.execution.mode == "local"
+        with pytest.raises(NotImplementedError, match="execution.mode='ray'"):
+            Pipeline(cfg, device="cpu", distributed=True)
+
+    def test_pipeline_allows_serial_construction(self):
+        from maor.config import Config
+        from maor.pipeline.orchestrator import Pipeline
+
+        pipe = Pipeline(Config.load(), device="cpu", distributed=False)
+        assert pipe.distributed is False
+        pipe.close()
+
+    def test_refusal_message_names_the_alternative(self):
+        from maor.config import Config
+        from maor.pipeline.orchestrator import Pipeline
+
+        with pytest.raises(NotImplementedError) as exc:
+            Pipeline(Config.load(), device="cpu", distributed=True)
+        assert "--ablation local" in str(exc.value)
