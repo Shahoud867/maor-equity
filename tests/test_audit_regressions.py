@@ -260,22 +260,50 @@ class TestC5CommunicationAccounting:
 
 
 # ---------------------------------------------------------------------------
-# M1 — the temporal dimension shares the market checkpoint, and says so
+# M1 — the temporal dimension now uses a genuinely independent checkpoint
 # ---------------------------------------------------------------------------
+#
+# The first remediation pass declared the sharing (shares_checkpoint_with) so it
+# was at least visible. Measuring the declared state (finding N3) showed
+# declaring it was not enough: 985/985 routed temporal labels on Financial
+# PhraseBank came back identical to market's own label on the same text,
+# because deterministic inference on identical weights given identical text
+# cannot do otherwise. Any rule conditioning on market and temporal disagreeing
+# was unsatisfiable by construction. These tests now assert the actual fix:
+# three distinct checkpoints, with temporal using a model purpose-built for
+# forward-looking-statement detection rather than a reused pointer.
 
 
 class TestM1DimensionHonesty:
-    def test_temporal_declares_it_shares_the_market_checkpoint(self):
+    def test_temporal_uses_an_independent_checkpoint(self):
         bundle = SentimentBundle(device="cpu")
         specs = {s.name: s for s in bundle.specs}
-        assert specs["temporal"].shares_checkpoint_with == "market"
-        assert specs["temporal"].checkpoint == specs["market"].checkpoint
+        assert specs["temporal"].shares_checkpoint_with is None
+        assert specs["temporal"].checkpoint != specs["market"].checkpoint
         assert specs["regulatory"].shares_checkpoint_with is None
 
-    def test_there_are_two_distinct_checkpoints_not_three(self):
+    def test_there_are_three_distinct_checkpoints(self):
         bundle = SentimentBundle(device="cpu")
         distinct = {s.checkpoint for s in bundle.specs}
-        assert len(distinct) == 2, "the '3-D' design uses two sets of weights"
+        assert len(distinct) == 3, "the '3-D' design must use three sets of weights"
+
+    def test_temporal_uses_a_different_label_scheme_than_polarity(self):
+        """finbert-fls reports forward-commitment specificity, not sentiment.
+
+        Forcing it onto positive/neutral/negative would misrepresent what the
+        model actually says, which is exactly the kind of dishonesty this suite
+        exists to catch.
+        """
+        bundle = SentimentBundle(device="cpu")
+        specs = {s.name: s for s in bundle.specs}
+        assert specs["market"].label_scheme == "polarity"
+        assert specs["regulatory"].label_scheme == "polarity"
+        assert specs["temporal"].label_scheme == "fls"
+        assert specs["temporal"].labels == (
+            "not_fls",
+            "nonspecific_fls",
+            "specific_fls",
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -604,3 +632,134 @@ class TestChunking:
         cov = coverage_stats(chunks, chunks)
         assert cov["vocabulary_retained_pct"] == 100.0
         assert cov["n_document_positions_lost"] == 0
+
+
+# ---------------------------------------------------------------------------
+# N3 remediation — genuinely independent temporal dimension (finbert-fls)
+# ---------------------------------------------------------------------------
+
+
+class TestN3TemporalIndependence:
+    """The follow-up fix to finding N3: a real third checkpoint, not a label."""
+
+    def test_normalise_label_maps_polarity_labels(self):
+        from maor.agents.sentiment import normalise_label
+
+        assert normalise_label("Positive", "polarity") == "positive"
+        assert normalise_label("NEGATIVE", "polarity") == "negative"
+        assert normalise_label("neutral", "polarity") == "neutral"
+
+    def test_normalise_label_maps_fls_labels(self):
+        from maor.agents.sentiment import normalise_label
+
+        assert normalise_label("Specific FLS", "fls") == "specific_fls"
+        assert normalise_label("Non-specific FLS", "fls") == "nonspecific_fls"
+        assert normalise_label("Not FLS", "fls") == "not_fls"
+
+    def test_normalise_label_rejects_unknown_labels(self):
+        from maor.agents.sentiment import normalise_label
+
+        with pytest.raises(ValueError, match="unrecognised"):
+            normalise_label("Bullish", "polarity")
+        with pytest.raises(ValueError, match="unrecognised"):
+            normalise_label("Maybe FLS", "fls")
+
+    def test_normalise_label_rejects_unknown_scheme(self):
+        from maor.agents.sentiment import normalise_label
+
+        with pytest.raises(ValueError, match="unknown label scheme"):
+            normalise_label("positive", "sarcasm")
+
+    def test_sentiment_matrix_carries_per_row_label_schemes(self):
+        from maor.agents.sentiment import DimensionResult, build_matrix
+
+        results = {
+            "market": DimensionResult(
+                dimension="market", present=True, checkpoint="a",
+                label_scheme="polarity", mean_vector=[0.7, 0.2, 0.1],
+            ),
+            "temporal": DimensionResult(
+                dimension="temporal", present=True, checkpoint="b",
+                label_scheme="fls", mean_vector=[0.1, 0.2, 0.7],
+            ),
+        }
+        matrix = build_matrix(results)
+        assert matrix.label_order_for("market") == ("positive", "neutral", "negative")
+        assert matrix.label_order_for("temporal") == (
+            "not_fls", "nonspecific_fls", "specific_fls",
+        )
+        assert matrix.direction("market") == "positive"
+        assert matrix.direction("temporal") == "specific_fls"
+
+    def test_matrix_to_dict_reports_per_dimension_labels(self):
+        from maor.agents.sentiment import DimensionResult, build_matrix
+
+        results = {
+            "temporal": DimensionResult(
+                dimension="temporal", present=True, checkpoint="b",
+                label_scheme="fls", mean_vector=[0.1, 0.2, 0.7],
+            ),
+        }
+        d = build_matrix(results).to_dict()
+        assert d["per_dimension_labels"]["temporal"] == [
+            "not_fls", "nonspecific_fls", "specific_fls",
+        ]
+
+    def test_multidimensional_rule_uses_specific_fls_not_positive(self):
+        from maor.evaluation.h3_sentiment import multidimensional_direction
+
+        # Negative market + a concrete forward commitment softens to HOLD.
+        assert (
+            multidimensional_direction("negative", "neutral", "specific_fls")
+            == "HOLD"
+        )
+        # A vague forward statement does not trigger the softening rule.
+        assert (
+            multidimensional_direction("negative", "neutral", "nonspecific_fls")
+            == "SELL"
+        )
+        assert (
+            multidimensional_direction("negative", "neutral", "not_fls") == "SELL"
+        )
+        assert multidimensional_direction("negative", "neutral", None) == "SELL"
+
+    def test_distinctness_check_flags_shared_checkpoints(self):
+        from maor.agents.sentiment import DimensionResult
+        from maor.evaluation.h3_sentiment import _distinctness_check
+
+        shared = DimensionResult(
+            dimension="temporal", present=True, checkpoint="ProsusAI/finbert",
+            label_scheme="polarity",
+        )
+        market = DimensionResult(
+            dimension="market", present=True, checkpoint="ProsusAI/finbert",
+            label_scheme="polarity",
+        )
+        regulatory = DimensionResult(
+            dimension="regulatory", present=True, checkpoint="finbert-tone",
+            label_scheme="polarity",
+        )
+        result = _distinctness_check(market, regulatory, shared)
+        assert result["fully_distinct"] is False
+        assert result["temporal_shares_market_checkpoint"] is True
+        assert result["n_distinct_checkpoints"] == 2
+
+    def test_distinctness_check_passes_for_three_real_checkpoints(self):
+        from maor.agents.sentiment import DimensionResult
+        from maor.evaluation.h3_sentiment import _distinctness_check
+
+        market = DimensionResult(
+            dimension="market", present=True, checkpoint="ProsusAI/finbert",
+            label_scheme="polarity",
+        )
+        regulatory = DimensionResult(
+            dimension="regulatory", present=True, checkpoint="finbert-tone",
+            label_scheme="polarity",
+        )
+        temporal = DimensionResult(
+            dimension="temporal", present=True, checkpoint="finbert-fls",
+            label_scheme="fls",
+        )
+        result = _distinctness_check(market, regulatory, temporal)
+        assert result["fully_distinct"] is True
+        assert result["n_distinct_checkpoints"] == 3

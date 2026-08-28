@@ -36,13 +36,21 @@ class ModelConfig:
 
     sentiment_market: str = "ProsusAI/finbert"
     sentiment_regulatory: str = "yiyanghkust/finbert-tone"
+    # Forward-looking-statement classifier. Genuinely distinct from the market
+    # checkpoint (finding N3: it previously reused market's weights, giving
+    # 985/985 identical labels on PhraseBank — see docs/AUDIT_RESPONSE.md).
+    sentiment_temporal: str = "yiyanghkust/finbert-fls"
     summarizer: str = "microsoft/Phi-3-mini-4k-instruct"
 
     # Quantisation. "none" | "int8" | "nf4"
     sentiment_quantisation: str = "none"
     summarizer_quantisation: str = "nf4"
 
-    sentiment_estimated_vram_mb: float = 550.0
+    # Three BERT-base checkpoints resident during Phase A (market + regulatory +
+    # temporal), ~220-260 MB each at FP16-equivalent. Corrected from 550 MB (two
+    # checkpoints) now that temporal is a real third model rather than a reused
+    # pointer; vram-verify measures the true figure.
+    sentiment_estimated_vram_mb: float = 800.0
     summarizer_estimated_vram_mb: float = 2800.0
 
     max_input_tokens: int = 3500

@@ -24,7 +24,7 @@ import logging
 from dataclasses import dataclass
 from typing import Any, Sequence
 
-from ..agents.sentiment import LABELS, DimensionRouter, SentimentBundle
+from ..agents.sentiment import DimensionResult, DimensionRouter, SentimentBundle
 from . import stats
 from .metrics import (
     HypothesisTest,
@@ -67,12 +67,21 @@ def multidimensional_direction(
     That distinction is the M2 fix: previously an absent dimension was scored
     from a placeholder sentence and came back confidently neutral.
 
+    ``temporal_label`` is now one of ``FLS_LABELS`` (not_fls / nonspecific_fls /
+    specific_fls), not a polarity label. finbert-fls reports whether a forward
+    commitment was made, not whether that commitment was optimistic — so rule 3
+    below reads as "a concrete forward commitment tempers a negative near-term
+    signal", which is a different (and more defensible) claim than the original
+    "positive forward tone offsets bad results": a company will rarely commit to
+    *specific* numbers it does not expect to hit, so a specific claim under poor
+    current results is itself informative, independent of its sentiment.
+
     Rules, in order:
       1. Regulatory veto: negative regulatory signal caps upside at HOLD.
       2. Regulatory escalation: negative regulatory with non-positive market
          resolves to SELL.
-      3. Temporal offset: negative market with positive forward-looking signal
-         softens to HOLD.
+      3. Temporal offset: negative market with a *specific* forward-looking
+         commitment softens to HOLD.
       4. Otherwise fall through to the market signal.
     """
     if regulatory_label == "negative":
@@ -80,7 +89,7 @@ def multidimensional_direction(
             return "HOLD"  # rule 1
         return "SELL"  # rule 2
 
-    if market_label == "negative" and temporal_label == "positive":
+    if market_label == "negative" and temporal_label == "specific_fls":
         return "HOLD"  # rule 3
 
     return DIRECTION_FROM_SENTIMENT[market_label]  # rule 4
@@ -211,8 +220,53 @@ def _validity_threats(
     return threats
 
 
-def _argmax_label(vector: Sequence[float]) -> str:
-    return LABELS[max(range(len(vector)), key=lambda i: vector[i])]
+def _argmax_label(scores: dict[str, float], label_order: Sequence[str]) -> str:
+    return max(label_order, key=lambda lab: scores[lab])
+
+
+def _distinctness_check(
+    market_res: DimensionResult, regulatory_res: DimensionResult, temporal_res: DimensionResult
+) -> dict[str, Any]:
+    """Confirm the three dimensions are not silently sharing weights.
+
+    Finding N3 was found by measurement, not inspection: temporal reused the
+    market checkpoint, and 985/985 routed labels came back identical to market's
+    own label on the same text. That specific failure mode — declaring
+    independence while sharing weights — is exactly what this check exists to
+    catch again if it ever recurs.
+    """
+    checkpoints = {
+        "market": market_res.checkpoint,
+        "regulatory": regulatory_res.checkpoint,
+        "temporal": temporal_res.checkpoint,
+    }
+    n_distinct = len(set(checkpoints.values()))
+    shares = {
+        "temporal_shares_market_checkpoint": temporal_res.checkpoint == market_res.checkpoint,
+        "temporal_shares_regulatory_checkpoint": (
+            temporal_res.checkpoint == regulatory_res.checkpoint
+        ),
+        "regulatory_shares_market_checkpoint": (
+            regulatory_res.checkpoint == market_res.checkpoint
+        ),
+    }
+    return {
+        "checkpoints": checkpoints,
+        "n_distinct_checkpoints": n_distinct,
+        "fully_distinct": n_distinct == 3,
+        "label_schemes": {
+            "market": market_res.label_scheme,
+            "regulatory": regulatory_res.label_scheme,
+            "temporal": temporal_res.label_scheme,
+        },
+        **shares,
+        "explanation": (
+            "n_distinct_checkpoints < 3 means at least one dimension is scored by "
+            "weights also used elsewhere, which — as measured previously for "
+            "temporal/market — can make a dimension's output deterministically "
+            "identical to another's rather than independent."
+        ),
+    }
 
 
 def run_h3(
@@ -258,32 +312,23 @@ def run_h3(
     reg_res = bundle.classify(reg_texts, "regulatory")
     tmp_res = bundle.classify(tmp_texts, "temporal")
 
-    market_labels = [_argmax_label([s[l] for l in LABELS]) for s in market_res.scores]
+    market_labels = [_argmax_label(s, market_res.label_order) for s in market_res.scores]
 
-    reg_iter = iter(
-        [_argmax_label([s[l] for l in LABELS]) for s in reg_res.scores]
-    )
-    tmp_iter = iter(
-        [_argmax_label([s[l] for l in LABELS]) for s in tmp_res.scores]
-    )
+    reg_iter = iter(_argmax_label(s, reg_res.label_order) for s in reg_res.scores)
+    tmp_iter = iter(_argmax_label(s, tmp_res.label_order) for s in tmp_res.scores)
     reg_labels: list[str | None] = [next(reg_iter) if m else None for m in reg_mask]
     tmp_labels: list[str | None] = [next(tmp_iter) if m else None for m in tmp_mask]
 
-    # ---- Dimension redundancy check ---------------------------------------
-    # The temporal dimension is the market checkpoint applied to a subset of the
-    # market inputs. Whenever that subset contains the *identical* text (as it
-    # does at sentence granularity), determinism forces temporal == market, and
-    # any decision rule conditioning on the two disagreeing is unsatisfiable.
-    # This is a structural property, not a property of this corpus, so it is
-    # measured and reported rather than inferred.
-    shared = tmp_res.shares_checkpoint_with == "market"
-    tmp_matches_market = [
-        (m, t) for m, t, mask in zip(market_labels, tmp_labels, tmp_mask) if mask
-    ]
-    n_temporal_identical = sum(1 for m, t in tmp_matches_market if m == t)
-    temporal_redundant = (
-        bool(tmp_matches_market) and n_temporal_identical == len(tmp_matches_market)
-    )
+    # ---- Distinctness check -------------------------------------------------
+    # Confirms the fix for finding N3 (temporal reused the market checkpoint,
+    # producing 985/985 identical labels) actually holds for this run, rather
+    # than assuming it from the code.
+    distinctness = _distinctness_check(market_res, reg_res, tmp_res)
+
+    tmp_distribution: dict[str, int] = {}
+    for lab in tmp_labels:
+        if lab is not None:
+            tmp_distribution[lab] = tmp_distribution.get(lab, 0) + 1
 
     # ---- Apply the pre-registered decision rules --------------------------
     gold_dirs = [DIRECTION_FROM_SENTIMENT[g] for g in gold_labels]
@@ -369,10 +414,12 @@ def run_h3(
             "b3": "direction = map(argmax(market_sentiment))",
             "multidimensional": (
                 "regulatory==negative -> HOLD if market positive else SELL; "
-                "market==negative and temporal==positive -> HOLD; "
+                "market==negative and temporal==specific_fls -> HOLD; "
                 "else map(market)"
             ),
             "direction_mapping": DIRECTION_FROM_SENTIMENT,
+            "temporal_label_scheme": "fls (not_fls / nonspecific_fls / specific_fls) "
+            "— specificity of a forward-looking statement, not sentiment polarity",
             "pre_registered": True,
         },
         "routing": {
@@ -386,13 +433,15 @@ def run_h3(
             "market_checkpoint": market_res.checkpoint,
             "regulatory_checkpoint": reg_res.checkpoint,
             "temporal_checkpoint": tmp_res.checkpoint,
-            "temporal_shares_checkpoint_with": tmp_res.shares_checkpoint_with,
+            "temporal_label_scheme": tmp_res.label_scheme,
             "n_distinct_checkpoints_loaded": bundle.n_distinct_checkpoints,
             "quantisation": bundle.quantisation,
             "device": bundle.device,
             "note": (
-                "The temporal dimension reuses the market checkpoint. There are "
-                "two sets of weights, not three."
+                "Three genuinely distinct checkpoints. Temporal previously reused "
+                "the market checkpoint (finding N3); it now uses "
+                "yiyanghkust/finbert-fls, a model purpose-built for "
+                "forward-looking-statement detection, with its own label space."
             ),
         },
         "results": {
@@ -441,28 +490,20 @@ def run_h3(
             n_temporal=len(tmp_texts),
             n_total=len(texts),
         ),
-        "dimension_redundancy": {
-            "temporal_shares_market_checkpoint": shared,
-            "n_temporal_routed": len(tmp_matches_market),
-            "n_temporal_label_identical_to_market": n_temporal_identical,
-            "temporal_identical_pct": (
-                round(100 * n_temporal_identical / len(tmp_matches_market), 2)
-                if tmp_matches_market
-                else None
-            ),
-            "temporal_fully_redundant": temporal_redundant,
-            "unsatisfiable_rules": (
-                ["market==negative and temporal==positive"] if temporal_redundant else []
-            ),
-            "explanation": (
-                "The temporal dimension is scored by the market checkpoint. When it "
-                "is routed the same text as market — which is always the case at "
-                "sentence granularity — deterministic inference forces an identical "
-                "label. Any rule requiring market and temporal to disagree is then "
-                "unsatisfiable by construction, so the temporal dimension cannot "
-                "change a recommendation no matter what the corpus contains. At "
-                "chunk granularity the two receive different token spans, so the "
-                "labels can differ; that case is untested here."
+        "dimension_distinctness": {
+            **distinctness,
+            "n_temporal_routed": sum(1 for m in tmp_mask if m),
+            "temporal_label_distribution": tmp_distribution,
+            "note": (
+                "Supersedes the earlier 'dimension_redundancy' block. That check "
+                "measured whether temporal's output matched market's output "
+                "verbatim, which was the correct diagnostic while temporal shared "
+                "market's checkpoint (finding N3: 985/985 identical). Now that the "
+                "checkpoints are distinct, per-item label equality is no longer a "
+                "meaningful redundancy test — two independent classifiers can "
+                "legitimately agree on easy cases. What this block checks instead "
+                "is that the weights themselves are distinct and that the temporal "
+                "classifier's output is not degenerate (e.g. always 'not_fls')."
             ),
         },
         "low_confidence_counts": {

@@ -97,6 +97,7 @@ def run_vram_verification(config: Any, *, dry_run: bool = False) -> dict[str, An
     bundle = SentimentBundle(
         market_checkpoint=config.models.sentiment_market,
         regulatory_checkpoint=config.models.sentiment_regulatory,
+        temporal_checkpoint=config.models.sentiment_temporal,
         device="cuda",
         quantisation=config.models.sentiment_quantisation,
         batch_size=config.models.sentiment_batch_size,

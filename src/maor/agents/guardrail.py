@@ -139,17 +139,20 @@ class GuardrailAgent:
             if rows is not None:
                 order = sentiment.dimension_order
                 present = sentiment.present
-                labels = sentiment.label_order
                 for i, dim in enumerate(order):
                     if not present[i]:
                         # Absent dimensions are stated as absent, not as neutral.
                         parts.append(f"{dim.capitalize()} sentiment: not present in document")
                     else:
+                        # Each dimension has its own label space (market/regulatory
+                        # are polarity, temporal is forward-looking-statement
+                        # specificity) — read per-row, not from one shared scheme.
+                        row_labels = sentiment.label_order_for(dim)
                         row = rows[i]
                         detail = ", ".join(
-                            f"{lab}={row[j]:.2f}" for j, lab in enumerate(labels)
+                            f"{lab}={row[j]:.2f}" for j, lab in enumerate(row_labels)
                         )
-                        parts.append(f"{dim.capitalize()} sentiment: {detail}")
+                        parts.append(f"{dim.capitalize()} ({'/'.join(row_labels)}): {detail}")
             else:
                 arr = np.asarray(sentiment, dtype=float)
                 parts.append(f"Sentiment matrix: {np.array2string(arr, precision=2)}")

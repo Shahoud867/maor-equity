@@ -155,6 +155,7 @@ def smoke(cfg: Any, device: str) -> int:
             lambda: SentimentBundle(
                 market_checkpoint=cfg.models.sentiment_market,
                 regulatory_checkpoint=cfg.models.sentiment_regulatory,
+                temporal_checkpoint=cfg.models.sentiment_temporal,
                 device=device,
                 quantisation=cfg.models.sentiment_quantisation,
                 batch_size=cfg.models.sentiment_batch_size,
@@ -597,6 +598,7 @@ def h3_sequence(
     bundle = SentimentBundle(
         market_checkpoint=cfg.models.sentiment_market,
         regulatory_checkpoint=cfg.models.sentiment_regulatory,
+        temporal_checkpoint=cfg.models.sentiment_temporal,
         device=device,
         quantisation=cfg.models.sentiment_quantisation,
         batch_size=plan.batch_size,

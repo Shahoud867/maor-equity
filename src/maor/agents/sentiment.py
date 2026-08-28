@@ -1,14 +1,25 @@
 """Multi-dimensional financial sentiment.
 
-Two audit findings are corrected here, and one piece of honesty is enforced in
-the code so it cannot drift back out of the paper.
+Three audit findings are corrected here.
 
 **M1 — "3-D sentiment" was two checkpoints, not three.** The temporal dimension
 reused the market pipeline object (``self._pipe_tmp = self._pipe_mkt``), so it was
-the same model applied to a keyword-selected subset of the same chunks. That is
-not a third dimension. The sharing is legitimate on a 4 GB card and is kept, but
-it is now named (:attr:`DimensionSpec.shares_checkpoint_with`) and surfaced in
-every result, so no downstream text can describe this as three independent models.
+the same model applied to a keyword-selected subset of the same chunks. Measuring
+this (``docs/AUDIT_RESPONSE.md``, finding N3) showed it was not merely "the same
+model" in spirit but literally identical output: 985 of 985 routed temporal
+labels matched their market label exactly, because deterministic inference on
+identical weights given identical text cannot do otherwise. Declaring the sharing
+(as a first pass) made the defect visible; it did not fix it.
+
+The fix here is a genuinely independent third checkpoint:
+``yiyanghkust/finbert-fls``, a BERT model fine-tuned specifically to classify
+forward-looking statements (Not FLS / Non-specific FLS / Specific FLS) — the
+semantically correct model for "temporal" content, and a different label space
+from market/regulatory's positive/neutral/negative. That heterogeneity is real:
+a specific forward commitment is not "positive" in the way a strong quarter is,
+so :class:`DimensionSpec` now carries its own ``label_scheme`` and the sentiment
+matrix stores per-row label orders rather than forcing every dimension onto one
+scheme.
 
 **M2 — the regulatory row was computed from a placeholder sentence.** When no
 chunk matched the regulatory regex, the router emitted the literal string
@@ -30,8 +41,36 @@ import numpy as np
 
 log = logging.getLogger(__name__)
 
-# Canonical label order for every sentiment row.
+# Polarity labels: market and regulatory sentiment.
 LABELS = ("positive", "neutral", "negative")
+
+# Forward-looking-statement specificity labels: temporal sentiment. Not a
+# polarity scale — "specific_fls" means a concrete forward commitment was made,
+# not that the commitment was optimistic. Order matches finbert-fls's own
+# id2label (0=Not FLS, 1=Non-specific FLS, 2=Specific FLS).
+FLS_LABELS = ("not_fls", "nonspecific_fls", "specific_fls")
+
+LABEL_SCHEMES: dict[str, tuple[str, ...]] = {"polarity": LABELS, "fls": FLS_LABELS}
+
+_FLS_RAW_TO_CANONICAL = {
+    "notfls": "not_fls",
+    "nonspecificfls": "nonspecific_fls",
+    "specificfls": "specific_fls",
+}
+
+
+def normalise_label(raw: str, scheme: str) -> str:
+    """Map a pipeline's raw label string onto the canonical key for its scheme."""
+    key = raw.strip().lower().replace("-", "").replace(" ", "").replace("_", "")
+    if scheme == "polarity":
+        if key not in LABELS:
+            raise ValueError(f"unrecognised polarity label {raw!r}")
+        return key
+    if scheme == "fls":
+        if key not in _FLS_RAW_TO_CANONICAL:
+            raise ValueError(f"unrecognised FLS label {raw!r}")
+        return _FLS_RAW_TO_CANONICAL[key]
+    raise ValueError(f"unknown label scheme {scheme!r}")
 
 
 # Ordinary financial English. If a tokenizer cannot resolve most of these to real
@@ -87,61 +126,91 @@ def verify_tokenizer(tokenizer: Any, checkpoint: str, *, max_unk_ratio: float = 
 
 @dataclass(frozen=True)
 class DimensionSpec:
-    """A sentiment dimension and the checkpoint that scores it."""
+    """A sentiment dimension, the checkpoint that scores it, and its label space.
+
+    ``label_scheme`` is looked up in :data:`LABEL_SCHEMES`. Dimensions are not
+    required to share a label space — market/regulatory are polarity, temporal
+    is forward-looking-statement specificity — and forcing them onto one scheme
+    is what let a reused checkpoint pass as an "independent" dimension.
+    """
 
     name: str
     checkpoint: str
+    label_scheme: str = "polarity"
     # When set, this dimension is scored by the same loaded weights as another
-    # dimension. Recorded so the distinction survives into the paper.
+    # dimension. Recorded so the distinction survives into the paper. None of
+    # the three default dimensions share a checkpoint any more.
     shares_checkpoint_with: str | None = None
+
+    @property
+    def labels(self) -> tuple[str, ...]:
+        return LABEL_SCHEMES[self.label_scheme]
 
 
 @dataclass
 class DimensionResult:
     """Scores for one dimension over the chunks routed to it.
 
-    ``present=False`` means no content was routed here. It does not mean neutral.
+    ``present=False`` means no content was routed here. It does not mean neutral
+    — and for the ``fls`` scheme there is no "neutral" to fall back to at all.
     """
 
     dimension: str
     present: bool
     checkpoint: str
+    label_scheme: str = "polarity"
     shares_checkpoint_with: str | None = None
     scores: list[dict[str, float]] = field(default_factory=list)
     n_texts: int = 0
     n_low_confidence: int = 0
     mean_vector: list[float] | None = None
 
+    @property
+    def label_order(self) -> tuple[str, ...]:
+        return LABEL_SCHEMES[self.label_scheme]
+
     def to_dict(self) -> dict[str, Any]:
         return {
             "dimension": self.dimension,
             "present": self.present,
             "checkpoint": self.checkpoint,
+            "label_scheme": self.label_scheme,
             "shares_checkpoint_with": self.shares_checkpoint_with,
             "n_texts": self.n_texts,
             "n_low_confidence": self.n_low_confidence,
             "mean_vector": self.mean_vector,
-            "label_order": list(LABELS),
+            "label_order": list(self.label_order),
         }
 
 
 @dataclass
 class SentimentMatrix:
-    """The 3xN sentiment matrix with explicit missingness.
+    """The 3xN sentiment matrix with explicit missingness and per-row label spaces.
 
     ``rows`` is ordered as ``dimension_order``. A missing dimension is a row of
     NaN and a False entry in :attr:`present`, so a consumer cannot silently treat
-    "absent" as "neutral".
+    "absent" as "neutral". ``label_schemes`` is parallel to ``dimension_order``:
+    rows are not assumed to share a label space, because they no longer do.
     """
 
     rows: np.ndarray
     dimension_order: tuple[str, ...]
     present: tuple[bool, ...]
-    label_order: tuple[str, ...] = LABELS
+    label_schemes: tuple[str, ...] = ()
+
+    def __post_init__(self) -> None:
+        if not self.label_schemes:
+            # Backward-compatible default for callers that only ever used
+            # polarity dimensions (e.g. ad-hoc tests).
+            self.label_schemes = tuple("polarity" for _ in self.dimension_order)
 
     @property
     def n_present(self) -> int:
         return sum(self.present)
+
+    def label_order_for(self, dimension: str) -> tuple[str, ...]:
+        i = self.dimension_order.index(dimension)
+        return LABEL_SCHEMES[self.label_schemes[i]]
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -150,19 +219,24 @@ class SentimentMatrix:
                 for row in self.rows
             ],
             "dimension_order": list(self.dimension_order),
-            "label_order": list(self.label_order),
+            "label_schemes": list(self.label_schemes),
+            "per_dimension_labels": {
+                dim: list(LABEL_SCHEMES[scheme])
+                for dim, scheme in zip(self.dimension_order, self.label_schemes)
+            },
             "present": list(self.present),
             "n_present_dimensions": self.n_present,
         }
 
     def direction(self, dimension: str) -> str | None:
-        """argmax label for one dimension, or None when the dimension is absent."""
+        """argmax label for one dimension, in that dimension's own label space."""
         if dimension not in self.dimension_order:
             raise KeyError(dimension)
         i = self.dimension_order.index(dimension)
         if not self.present[i]:
             return None
-        return self.label_order[int(np.nanargmax(self.rows[i]))]
+        labels = LABEL_SCHEMES[self.label_schemes[i]]
+        return labels[int(np.nanargmax(self.rows[i]))]
 
 
 class DimensionRouter:
@@ -242,6 +316,7 @@ class SentimentBundle:
         self,
         market_checkpoint: str = "ProsusAI/finbert",
         regulatory_checkpoint: str = "yiyanghkust/finbert-tone",
+        temporal_checkpoint: str = "yiyanghkust/finbert-fls",
         *,
         device: str = "cpu",
         quantisation: str = "none",
@@ -255,13 +330,16 @@ class SentimentBundle:
         self.device = device
         self.quantisation = quantisation
 
-        # Temporal deliberately shares the market checkpoint. Declared, not hidden.
+        # Three genuinely distinct checkpoints. Temporal previously reused the
+        # market pipeline object; measuring that (985/985 identical labels on
+        # PhraseBank) showed it produced no independent signal at all. finbert-fls
+        # is purpose-built for forward-looking-statement detection, which is what
+        # "temporal" was always supposed to mean, and its label space
+        # (specificity, not polarity) is genuinely different from market's.
         self.specs = (
-            DimensionSpec("market", market_checkpoint),
-            DimensionSpec("regulatory", regulatory_checkpoint),
-            DimensionSpec(
-                "temporal", market_checkpoint, shares_checkpoint_with="market"
-            ),
+            DimensionSpec("market", market_checkpoint, label_scheme="polarity"),
+            DimensionSpec("regulatory", regulatory_checkpoint, label_scheme="polarity"),
+            DimensionSpec("temporal", temporal_checkpoint, label_scheme="fls"),
         )
         self.dimension_order = tuple(s.name for s in self.specs)
 
@@ -432,12 +510,14 @@ class SentimentBundle:
 
     def classify(self, texts: Sequence[str], dimension: str) -> DimensionResult:
         spec = next(s for s in self.specs if s.name == dimension)
+        labels = spec.labels
         if not texts:
             # The M2 fix: absent, not neutral.
             return DimensionResult(
                 dimension=dimension,
                 present=False,
                 checkpoint=spec.checkpoint,
+                label_scheme=spec.label_scheme,
                 shares_checkpoint_with=spec.shares_checkpoint_with,
                 n_texts=0,
                 mean_vector=None,
@@ -456,15 +536,16 @@ class SentimentBundle:
         scores: list[dict[str, float]] = []
         n_low = 0
         for item in raw:
-            dist = {s["label"].lower(): float(s["score"]) for s in item}
-            # finbert-tone emits Positive/Negative/Neutral; ProsusAI emits
-            # lowercase. Normalising here keeps the label order canonical.
-            normalised = {lab: dist.get(lab, 0.0) for lab in LABELS}
+            dist = {
+                normalise_label(s["label"], spec.label_scheme): float(s["score"])
+                for s in item
+            }
+            normalised = {lab: dist.get(lab, 0.0) for lab in labels}
             if max(normalised.values()) < self.min_confidence:
                 n_low += 1
             scores.append(normalised)
 
-        arr = np.array([[s[lab] for lab in LABELS] for s in scores], dtype=float)
+        arr = np.array([[s[lab] for lab in labels] for s in scores], dtype=float)
         mean_vec = arr.mean(axis=0)
         total = mean_vec.sum()
         if total > 0:
@@ -474,6 +555,7 @@ class SentimentBundle:
             dimension=dimension,
             present=True,
             checkpoint=spec.checkpoint,
+            label_scheme=spec.label_scheme,
             shares_checkpoint_with=spec.shares_checkpoint_with,
             scores=scores,
             n_texts=len(texts),
@@ -540,20 +622,29 @@ class SentimentBundle:
 
 
 def build_matrix(results: dict[str, DimensionResult]) -> SentimentMatrix:
-    """Assemble the sentiment matrix, marking absent dimensions as NaN."""
+    """Assemble the sentiment matrix, marking absent dimensions as NaN.
+
+    Rows may use different label schemes (market/regulatory are polarity,
+    temporal is FLS-specificity); ``label_schemes`` on the returned matrix
+    records which scheme applies to each row so a consumer never reads a
+    temporal cell as if it were a positive/negative score.
+    """
     order = tuple(results.keys())
     rows = []
     present = []
+    schemes = []
     for name in order:
         r = results[name]
+        schemes.append(r.label_scheme)
         if r.present and r.mean_vector is not None:
             rows.append(r.mean_vector)
             present.append(True)
         else:
-            rows.append([np.nan] * len(LABELS))
+            rows.append([np.nan] * len(r.label_order))
             present.append(False)
     return SentimentMatrix(
         rows=np.array(rows, dtype=float),
         dimension_order=order,
         present=tuple(present),
+        label_schemes=tuple(schemes),
     )

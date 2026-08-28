@@ -11,6 +11,13 @@
 models:
   sentiment_market: ProsusAI/finbert
   sentiment_regulatory: yiyanghkust/finbert-tone
+  # Forward-looking-statement classifier — genuinely distinct from the market
+  # checkpoint. It previously reused sentiment_market's weights, which measured
+  # as 985/985 identical labels on Financial PhraseBank (finding N3;
+  # docs/AUDIT_RESPONSE.md). This model is purpose-built for the task "temporal"
+  # was always meant to capture, with its own label space (specificity of a
+  # forward commitment, not sentiment polarity).
+  sentiment_temporal: yiyanghkust/finbert-fls
   summarizer: microsoft/Phi-3-mini-4k-instruct
 
   # "none" | "int8" | "nf4".
@@ -20,8 +27,10 @@ models:
   sentiment_quantisation: none
   summarizer_quantisation: nf4
 
-  # Declared expectations, checked against reality by `vram-verify`.
-  sentiment_estimated_vram_mb: 550.0
+  # Declared expectations, checked against reality by `vram-verify`. 800 MB
+  # covers three BERT-base checkpoints (market + regulatory + temporal); this
+  # was 550 MB when temporal was a reused pointer rather than a real model.
+  sentiment_estimated_vram_mb: 800.0
   summarizer_estimated_vram_mb: 2800.0
 
   max_input_tokens: 3500

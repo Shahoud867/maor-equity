@@ -13,15 +13,18 @@ models:
   # quantising the quantisation constants.
   summarizer_quantisation: nf4
 
-  # FinBERT is 110M parameters (~440 MB FP32, ~220 MB FP16). It fits without
-  # quantisation, and leaving it unquantised keeps the sentiment measurement free
-  # of a quantisation confound. experiments/quantisation_sweep.yaml measures what
+  # FinBERT-family checkpoints are ~110M parameters each (~440 MB FP32, ~220 MB
+  # FP16). All three (market, regulatory, temporal) fit without quantisation,
+  # and leaving them unquantised keeps the sentiment measurement free of a
+  # quantisation confound. experiments/quantisation_sweep.yaml measures what
   # turning this on would cost in accuracy.
   sentiment_quantisation: none
 
   # Declared expectations. `vram-verify` measures the truth and reports the
-  # delta; if the delta is large, correct these numbers rather than the measurement.
-  sentiment_estimated_vram_mb: 550.0
+  # delta; if the delta is large, correct these numbers rather than the
+  # measurement. 800 MB covers three BERT-base checkpoints, comfortably under
+  # the usable budget below even before Phi-3 is unloaded for Phase A.
+  sentiment_estimated_vram_mb: 800.0
   summarizer_estimated_vram_mb: 2800.0
 
   # Keeps the generation window small enough that the KV cache does not grow into

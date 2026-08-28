@@ -115,6 +115,7 @@ class Pipeline:
         bundle = SentimentBundle(
             market_checkpoint=self.config.models.sentiment_market,
             regulatory_checkpoint=self.config.models.sentiment_regulatory,
+            temporal_checkpoint=self.config.models.sentiment_temporal,
             device=self.device,
             quantisation=self.config.models.sentiment_quantisation,
             batch_size=self.config.models.sentiment_batch_size,
