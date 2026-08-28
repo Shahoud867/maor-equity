@@ -13,6 +13,10 @@ from pathlib import Path
 from typing import Any
 
 from . import hardware
+from .execution.timeouts import TimeoutGuard, run_with_timeout
+from .gpu.lifecycle import ModelRegistry
+from .gpu.memory import snapshot as gpu_snapshot
+from .hardware import release_vram
 from .provenance import EvidenceClass, Provenance, Timer, config_hash, write_result
 
 log = logging.getLogger(__name__)
@@ -344,7 +348,13 @@ def h1_latency(
     cfg: Any, device: str, tickers: list[str], repeats: int, ablation: str
 ) -> int:
     from .data.datasets import load_ectsum
-    from .evaluation.h1_latency import Condition, RunOutcome, default_conditions, run_h1
+    from .evaluation.h1_latency import (
+        Condition,
+        RunOutcome,
+        default_conditions,
+        local_conditions,
+        run_h1,
+    )
     from .pipeline.orchestrator import Pipeline
 
     hw = hardware.probe()
@@ -355,33 +365,74 @@ def h1_latency(
     data = load_ectsum(cfg.data.ectsum_path, n_samples=len(tickers), seed=cfg.execution.seed)
     documents = dict(zip(tickers, data.documents))
 
-    conditions = (
-        default_conditions(include_cold=True)
-        if ablation == "full"
-        else [
+    if ablation == "full":
+        conditions = default_conditions(include_cold=True)
+    elif ablation == "local":
+        conditions = local_conditions(include_cold=True)
+    else:
+        conditions = [
             Condition(distributed=False, filter_enabled=True, warm_start=True),
-            Condition(distributed=True, filter_enabled=True, warm_start=True),
+            Condition(distributed=False, filter_enabled=False, warm_start=True),
         ]
-    )
+
+    if any(c.distributed for c in conditions) and cfg.execution.mode != "ray":
+        print(
+            "\nThe 'full' ablation includes distributed conditions, but the Ray\n"
+            "execution path is not implemented. Those cells would run identical\n"
+            "single-node code and report a distribution effect of ~0 that nothing\n"
+            "distributed actually produced — a fabricated null result.\n\n"
+            "Use --ablation local to cross the factors that are implemented\n"
+            "(chunk filter x warm start). The distribution factor stays PENDING\n"
+            "in docs/RESULTS_STATUS.md until a Ray path exists to measure it."
+        )
+        return 2
 
     print(f"H1 latency | device={device} | {len(conditions)} conditions "
           f"x {len(tickers)} documents x {repeats} repeats")
 
-    pipelines: dict[str, Pipeline] = {}
+    # Exactly one pipeline is resident at a time. Caching one per condition
+    # would keep up to six warm pipelines alive simultaneously, each holding its
+    # own ~2.8 GB summariser — roughly 17 GB on a 4 GB card. The pipeline is
+    # rebuilt when the condition changes, and the previous one is closed first.
+    current: dict[str, Any] = {"key": None, "pipeline": None}
+    memory_marks: list[dict[str, Any]] = []
+
+    def _close_current() -> None:
+        pipe = current.get("pipeline")
+        if pipe is None:
+            return
+        try:
+            pipe.close()
+        except Exception as exc:
+            log.warning("error closing pipeline %s: %s", current.get("key"), exc)
+        finally:
+            current["pipeline"] = None
+            current["key"] = None
+            release_vram()
 
     def execute(condition: Condition, ticker: str, repeat: int) -> RunOutcome:
         key = condition.name
-        if key not in pipelines:
-            pipelines[key] = Pipeline(
+        if current["key"] != key:
+            _close_current()
+            memory_marks.append(
+                {"event": f"before {key}", **gpu_snapshot(cfg.vram.device).to_dict()}
+            )
+            current["pipeline"] = Pipeline(
                 cfg,
                 budget=budget,
                 device=device,
                 warm_start=condition.warm_start,
                 filter_enabled=condition.filter_enabled,
+                distributed=condition.distributed,
             )
-        pipe = pipelines[key]
+            current["key"] = key
+
+        pipe = current["pipeline"]
         t0 = time.perf_counter()
-        output = pipe.run(ticker=ticker, document=documents[ticker])
+        with TimeoutGuard(
+            f"h1:{key}:{ticker}", cfg.execution.stage_timeout_s, interrupt=True
+        ):
+            output = pipe.run(ticker=ticker, document=documents[ticker])
         return RunOutcome(
             condition=condition,
             ticker=ticker,
@@ -401,8 +452,26 @@ def h1_latency(
                 seed=cfg.execution.seed,
             )
         finally:
-            for pipe in pipelines.values():
-                pipe.close()
+            _close_current()
+            memory_marks.append(
+                {"event": "after all conditions", **gpu_snapshot(cfg.vram.device).to_dict()}
+            )
+            registry_audit = ModelRegistry.instance().audit(cfg.vram.device)
+            if registry_audit["tracked_models"]:
+                log.warning(
+                    "models still resident after H1: %s", registry_audit["tracked_models"]
+                )
+                ModelRegistry.instance().release_all(cfg.vram.device)
+
+    payload["gpu_memory"] = {
+        "marks": memory_marks,
+        "registry_audit_after": registry_audit,
+        "note": (
+            "One pipeline is resident at a time; the previous is closed before the "
+            "next condition is constructed. Allocation at 'after all conditions' "
+            "should be near the value before the first condition."
+        ),
+    }
 
     payload["wall_clock_s"] = round(timer.elapsed_s, 2)
     prov = _provenance("H1_latency_and_parallelism_ceiling", cfg, hw)
@@ -478,3 +547,106 @@ def verify_cluster(cfg: Any) -> int:
         return 0
     finally:
         ray.shutdown()
+
+
+# ---------------------------------------------------------------------------
+# h3 (shared by the CLI command and the sequence runner)
+# ---------------------------------------------------------------------------
+
+
+def h3_sequence(
+    cfg: Any,
+    device: str,
+    *,
+    n_samples: int | None = None,
+    n_resamples: int = 10_000,
+    quiet: bool = False,
+) -> dict[str, Any]:
+    """Run H3 and write the result. One implementation, two callers.
+
+    The model is released in ``finally`` so an exception part-way through
+    classification cannot leave checkpoints resident for the next experiment.
+    """
+    from .agents.sentiment import DimensionRouter, SentimentBundle
+    from .data.datasets import load_financial_phrasebank
+    from .evaluation.h3_sentiment import run_h3
+    from .gpu.limits import plan_workload
+
+    hw = hardware.probe()
+    data = load_financial_phrasebank(n_samples=n_samples, seed=cfg.execution.seed)
+
+    if not quiet:
+        print(f"  dataset: {len(data)} sentences, {data.label_distribution()}")
+        print(f"  split identified as: {data.source['identified_agreement_split']}")
+
+    # Decide before loading whether this fits, rather than discovering it during
+    # the first forward pass.
+    plan = plan_workload(
+        "h3-sentiment",
+        model_mb=cfg.models.sentiment_estimated_vram_mb,
+        device=cfg.vram.device,
+        usable_fraction=cfg.vram.usable_fraction,
+        total_mb_override=cfg.vram.total_mb,
+        requested_batch_size=cfg.models.sentiment_batch_size,
+        already_resident_mb=ModelRegistry.instance().resident_mb(cfg.vram.device),
+    )
+    plan.raise_if_blocked()
+    for note in plan.adjustments:
+        log.info("h3 plan: %s", note)
+
+    bundle = SentimentBundle(
+        market_checkpoint=cfg.models.sentiment_market,
+        regulatory_checkpoint=cfg.models.sentiment_regulatory,
+        device=device,
+        quantisation=cfg.models.sentiment_quantisation,
+        batch_size=plan.batch_size,
+        max_length=cfg.models.sentiment_max_length,
+    )
+
+    release_info: Any = None
+    with Timer() as timer:
+        try:
+            run_with_timeout(
+                bundle.load,
+                cfg.execution.model_load_timeout_s,
+                label="h3 sentiment model load",
+            )
+            if not quiet:
+                print(f"  distinct checkpoints resident: {bundle.n_distinct_checkpoints}")
+            with TimeoutGuard(
+                "h3-classify", cfg.execution.stage_timeout_s * 4, interrupt=True
+            ):
+                result = run_h3(
+                    bundle=bundle,
+                    router=DimensionRouter(),
+                    texts=data.texts,
+                    gold_labels=data.labels,
+                    dataset_source=data.source,
+                    seed=cfg.execution.seed,
+                    n_resamples=n_resamples,
+                )
+        finally:
+            release_info = bundle.unload()
+
+    payload = result.payload
+    payload["wall_clock_s"] = round(timer.elapsed_s, 2)
+    payload["execution"] = {
+        "device": device,
+        "batch_size": plan.batch_size,
+        "plan": plan.to_dict(),
+        "model_release": release_info.to_dict() if release_info is not None else None,
+        "gpu_memory_after": gpu_snapshot(cfg.vram.device, label="h3:after").to_dict(),
+    }
+
+    prov = _provenance(
+        "H3_sentiment_dimensionality",
+        cfg,
+        hw,
+        caveats=[t["threat"] for t in payload.get("validity_threats", [])],
+    )
+    prov.duration_s = round(timer.elapsed_s, 2)
+    out = write_result(
+        Path(cfg.paths.results_dir) / "h3_sentiment.json", payload, provenance=prov
+    )
+    payload["_result_path"] = str(out)
+    return payload

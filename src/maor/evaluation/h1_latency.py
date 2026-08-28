@@ -78,11 +78,31 @@ class RunOutcome:
     metadata: dict[str, Any] = field(default_factory=dict)
 
 
-def default_conditions(*, include_cold: bool = True) -> list[Condition]:
-    """The 2x2 over execution mode and filtering, warm by default.
+def local_conditions(*, include_cold: bool = True) -> list[Condition]:
+    """Factors that are implemented single-node: chunk filter x warm start.
 
-    Cold-start conditions are added for the serial arm only, which is what
-    isolates the model-load cost the old baseline silently paid.
+    This is the default. It excludes the distribution factor because the Ray
+    execution path is not implemented, and a factor that does not change
+    execution yields a contrast of ~0 that reads as a measured null result.
+    """
+    conditions = [
+        Condition(distributed=False, filter_enabled=f, warm_start=True)
+        for f in (True, False)
+    ]
+    if include_cold:
+        conditions.append(
+            Condition(distributed=False, filter_enabled=True, warm_start=False)
+        )
+    return conditions
+
+
+def default_conditions(*, include_cold: bool = True) -> list[Condition]:
+    """The full 2x2 over distribution and filtering, warm by default.
+
+    Requires a working Ray path; :class:`~maor.pipeline.orchestrator.Pipeline`
+    raises for ``distributed=True`` when ``execution.mode`` is not ``ray``.
+    Cold-start conditions isolate the model-load cost the original baseline paid
+    silently on every run.
     """
     conditions = [
         Condition(distributed=d, filter_enabled=f, warm_start=True)

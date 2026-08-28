@@ -60,12 +60,12 @@ def setup_logging(verbosity: int = 0) -> None:
 
 def _load_config(args: argparse.Namespace) -> Config:
     overrides: dict[str, Any] = {}
-    for item in args.set or []:
+    for item in getattr(args, "set", None) or []:
         if "=" not in item:
             raise ConfigError(f"--set expects key=value, got {item!r}")
         key, raw = item.split("=", 1)
         overrides[key.strip()] = _coerce(raw.strip())
-    cfg = Config.load(args.config, **overrides)
+    cfg = Config.load(getattr(args, "config", None), **overrides)
     cfg.paths.ensure()
     return cfg
 
@@ -232,9 +232,9 @@ def cmd_doctor(args: argparse.Namespace) -> int:
 
 
 def cmd_h3(args: argparse.Namespace) -> int:
-    from .agents.sentiment import DimensionRouter, SentimentBundle
+    from .agents.sentiment import DimensionRouter
+    from .commands import h3_sequence
     from .data.datasets import load_financial_phrasebank
-    from .evaluation.h3_sentiment import DIRECTION_FROM_SENTIMENT, run_h3, sample_divergences
 
     cfg = _load_config(args)
     hw = hardware.probe()
@@ -242,52 +242,21 @@ def cmd_h3(args: argparse.Namespace) -> int:
 
     print(f"H3 sentiment dimensionality | device={device} | n={args.n_samples or 'all'}")
 
-    data = load_financial_phrasebank(n_samples=args.n_samples, seed=cfg.execution.seed)
-    print(f"  dataset: {len(data)} sentences, {data.label_distribution()}")
-    print(f"  split identified as: {data.source['identified_agreement_split']}")
-
     if args.dry_run:
+        data = load_financial_phrasebank(n_samples=args.n_samples, seed=cfg.execution.seed)
+        print(f"  dataset: {len(data)} sentences, {data.label_distribution()}")
         print("  dry-run: dataset loads and routing is exercised; no model is loaded")
-        router = DimensionRouter()
-        coverage = router.route(data.texts)["coverage"]
+        coverage = DimensionRouter().route(data.texts)["coverage"]
         print(f"  routing coverage: {json.dumps(coverage, indent=2)}")
         return 0
 
-    bundle = SentimentBundle(
-        market_checkpoint=cfg.models.sentiment_market,
-        regulatory_checkpoint=cfg.models.sentiment_regulatory,
-        device=device,
-        quantisation=cfg.models.sentiment_quantisation,
-        batch_size=cfg.models.sentiment_batch_size,
-        max_length=cfg.models.sentiment_max_length,
-    )
-
-    with Timer() as timer:
-        bundle.load()
-        print(f"  distinct checkpoints resident: {bundle.n_distinct_checkpoints}")
-        result = run_h3(
-            bundle=bundle,
-            router=DimensionRouter(),
-            texts=data.texts,
-            gold_labels=data.labels,
-            dataset_source=data.source,
-            seed=cfg.execution.seed,
-            n_resamples=args.n_resamples,
-        )
-
-    payload = result.payload
-    payload["wall_clock_s"] = round(timer.elapsed_s, 2)
-
-    prov = _make_provenance(
-        "H3_sentiment_dimensionality",
+    payload = h3_sequence(
         cfg,
-        hw,
-        caveats=[t["threat"] for t in payload.get("validity_threats", [])],
+        device,
+        n_samples=args.n_samples,
+        n_resamples=args.n_resamples,
     )
-    prov.duration_s = round(timer.elapsed_s, 2)
-
-    out = Path(cfg.paths.results_dir) / "h3_sentiment.json"
-    write_result(out, payload, provenance=prov)
+    out = Path(payload.pop("_result_path"))
 
     r = payload["results"]
     print("\n" + "-" * 62)
@@ -426,78 +395,148 @@ def cmd_report(args: argparse.Namespace) -> int:
     return build_report(_load_config(args))
 
 
+def cmd_gpu_audit(args: argparse.Namespace) -> int:
+    from .sequence import gpu_audit
+
+    return gpu_audit(_load_config(args))
+
+
+def cmd_run_all(args: argparse.Namespace) -> int:
+    from .sequence import run_all
+
+    # This command runs unattended for hours. Silence would be indistinguishable
+    # from a hang, so progress logging is on unless the caller asked otherwise.
+    if getattr(args, "verbose", 0) == 0:
+        setup_logging(1)
+
+    cfg = _load_config(args)
+    device = _resolve_device(cfg, hardware.probe())
+    return run_all(cfg, device, resume=not args.no_resume, only=args.only)
+
+
+def _global_options() -> argparse.ArgumentParser:
+    """Options accepted both before and after the subcommand.
+
+    Attached to the top-level parser *and* as a parent of every subparser, so
+    ``cli --config X h3-sentiment`` and ``cli h3-sentiment --config X`` both work.
+    Argparse otherwise accepts only the first form, and every example in the GPU
+    runbook is written in the second — the natural one to type.
+    """
+    shared = argparse.ArgumentParser(add_help=False)
+    # SUPPRESS, not None: a parent parser's defaults are applied again by the
+    # subparser, so a plain default would overwrite a value given *before* the
+    # subcommand with None. With SUPPRESS the attribute is only set when the flag
+    # is actually present, and the earlier value survives. Callers read these
+    # with getattr(..., default) since the attribute may be absent entirely.
+    shared.add_argument(
+        "--config",
+        type=Path,
+        default=argparse.SUPPRESS,
+        help="path to a YAML config",
+    )
+    shared.add_argument(
+        "--set",
+        action="append",
+        default=argparse.SUPPRESS,
+        metavar="KEY=VALUE",
+        help="override a config value, e.g. --set execution.device=cpu",
+    )
+    shared.add_argument(
+        "-v", "--verbose", action="count", default=argparse.SUPPRESS
+    )
+    return shared
+
+
 def build_parser() -> argparse.ArgumentParser:
+    shared = _global_options()
     p = argparse.ArgumentParser(
         prog="python -m maor.cli",
         description="maor-equity experiment runner",
         formatter_class=argparse.RawDescriptionHelpFormatter,
+        parents=[shared],
         epilog=(
             "Every command writes a provenance-stamped result to results/.\n"
             "Start with `doctor` to verify the environment."
         ),
     )
-    p.add_argument("--config", type=Path, default=None, help="path to a YAML config")
-    p.add_argument(
-        "--set",
-        action="append",
-        metavar="KEY=VALUE",
-        help="override a config value, e.g. --set execution.device=cpu",
-    )
-    p.add_argument("-v", "--verbose", action="count", default=0)
 
     sub = p.add_subparsers(dest="command", required=True)
 
-    d = sub.add_parser("doctor", help="verify hardware, dependencies and data")
+    d = sub.add_parser("doctor", parents=[shared], help="verify hardware, dependencies and data")
     d.set_defaults(func=cmd_doctor)
 
-    h3 = sub.add_parser("h3-sentiment", help="H3: multi-dimensional vs scalar sentiment (CPU-capable)")
+    h3 = sub.add_parser("h3-sentiment", parents=[shared], help="H3: multi-dimensional vs scalar sentiment (CPU-capable)")
     h3.add_argument("--n-samples", type=int, default=None, help="default: whole dataset")
     h3.add_argument("--n-resamples", type=int, default=10_000, help="bootstrap resamples")
     h3.add_argument("--dry-run", action="store_true")
     h3.set_defaults(func=cmd_h3)
 
-    cf = sub.add_parser("chunk-filter", help="ChunkFilter cost/coverage study (CPU)")
+    cf = sub.add_parser("chunk-filter", parents=[shared], help="ChunkFilter cost/coverage study (CPU)")
     cf.add_argument("--n-documents", type=int, default=None)
     cf.set_defaults(func=cmd_chunkfilter)
 
-    vr = sub.add_parser("vram-verify", help="measure real VRAM against the budget (GPU)")
+    vr = sub.add_parser("vram-verify", parents=[shared], help="measure real VRAM against the budget (GPU)")
     vr.add_argument("--dry-run", action="store_true")
     vr.set_defaults(func=cmd_vram)
 
-    fm = sub.add_parser("fetch-models", help="pre-download all checkpoints")
+    fm = sub.add_parser("fetch-models", parents=[shared], help="pre-download all checkpoints")
     fm.set_defaults(func=cmd_fetch_models)
 
-    sm = sub.add_parser("smoke", help="exercise every code path, small and fast")
+    sm = sub.add_parser("smoke", parents=[shared], help="exercise every code path, small and fast")
     sm.set_defaults(func=cmd_smoke)
 
-    h2 = sub.add_parser("h2-summarisation", help="H2: map-reduce vs single-pass on ECTSum (GPU)")
+    h2 = sub.add_parser("h2-summarisation", parents=[shared], help="H2: map-reduce vs single-pass on ECTSum (GPU)")
     h2.add_argument("--n-samples", type=int, default=100)
     h2.add_argument("--no-bertscore", action="store_true", help="skip BERTScore")
     h2.set_defaults(func=cmd_h2)
 
-    h1 = sub.add_parser("h1-latency", help="H1: latency and the parallelism ceiling (GPU)")
+    h1 = sub.add_parser("h1-latency", parents=[shared], help="H1: latency and the parallelism ceiling (GPU)")
     h1.add_argument("--tickers", nargs="+", default=["AAPL", "MSFT", "GOOGL"])
     h1.add_argument("--repeats", type=int, default=None, help="default: execution.n_repeats")
     h1.add_argument(
         "--ablation",
-        choices=["minimal", "full"],
-        default="full",
-        help="'full' runs the 2x2 plus cold-start conditions",
+        choices=["minimal", "local", "full"],
+        default="local",
+        help="'local' (default) crosses the implemented factors: chunk filter x "
+        "warm start. 'full' adds the distribution factor and requires "
+        "execution.mode=ray.",
     )
     h1.set_defaults(func=cmd_h1)
 
-    vc = sub.add_parser("verify-cluster", help="check a Ray cluster is usable")
+    vc = sub.add_parser("verify-cluster", parents=[shared], help="check a Ray cluster is usable")
     vc.set_defaults(func=cmd_verify_cluster)
 
-    rp = sub.add_parser("report", help="regenerate tables and RESULTS_STATUS.md")
+    rp = sub.add_parser("report", parents=[shared], help="regenerate tables and RESULTS_STATUS.md")
     rp.set_defaults(func=cmd_report)
+
+    ga = sub.add_parser("gpu-audit", parents=[shared], help="report device memory, residency and workload feasibility"
+    )
+    ga.set_defaults(func=cmd_gpu_audit)
+
+    ra = sub.add_parser("run-all", parents=[shared],
+        help="run the full experiment sequence with cleanup between runs",
+    )
+    ra.add_argument(
+        "--only",
+        nargs="+",
+        default=None,
+        metavar="NAME",
+        help="run only these experiments (chunk_filter h3_sentiment "
+        "vram_verification h2_summarisation h1_latency)",
+    )
+    ra.add_argument(
+        "--no-resume",
+        action="store_true",
+        help="ignore the checkpoint and re-run everything",
+    )
+    ra.set_defaults(func=cmd_run_all)
 
     return p
 
 
 def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
-    setup_logging(args.verbose)
+    setup_logging(getattr(args, "verbose", 0))
     try:
         return int(args.func(args))
     except ConfigError as exc:
