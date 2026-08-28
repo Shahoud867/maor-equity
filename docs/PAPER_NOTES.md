@@ -63,6 +63,34 @@ Carried from the audit, with the reason:
 | "> 4,000× return on computation" | Remove | Rests on an 80 ms cost; measured cost was 12,341 ms. |
 | "Peak VRAM 3,261 MB" | Re-measure | The trace predates the 4-bit change by two days. |
 
+## 4b. The temporal-dimension fix produced a second, more interesting negative result
+
+After replacing the shared-checkpoint temporal dimension with a genuinely
+independent model (`yiyanghkust/finbert-fls`), the redundancy is gone
+(three distinct checkpoints, real 82/12/6% label distribution, 1.548% real
+divergence) but accuracy **decreased** by 0.74 pp (CI [−1.09, −0.41] excludes
+zero, p = 0.0002). This is now measured, not assumed — see
+`docs/AUDIT_RESPONSE.md`, finding N3 follow-up.
+
+This is worth a paragraph in the paper, not a footnote, because the mechanism is
+identifiable and generalisable: the design conflated *specificity* of a forward
+statement with its *optimism*. A model that detects "this is a concrete
+forward-looking claim" says nothing about whether the claim is good or bad news,
+and a rule that treats specificity as grounds to override a negative signal will
+systematically mis-handle specific *bad* forecasts. Combined with a
+sentence-level evaluation granularity mismatch (temporal-routed text and
+market-scored text are literally the same sentence at this granularity, unlike
+in the deployed document-chunk pipeline), this produced a small but
+statistically significant regression.
+
+**Do not re-tune the rule against this test set to chase a positive number.**
+That would be the exact failure mode (P-hacking against a fixed evaluation set)
+this project's evidence policy exists to prevent. If a corrected rule is
+designed (e.g., combining specificity with the sentence's own polarity, which is
+already computed as `market_label` at this granularity — no extra inference
+needed), it should be pre-registered as a distinct, final hypothesis and
+evaluated once, with the outcome reported regardless of which way it goes.
+
 ## 5. The thesis the evidence currently supports
 
 The measured H3 result is a genuine negative finding, and it is more defensible

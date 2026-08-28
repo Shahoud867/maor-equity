@@ -3,15 +3,15 @@
     "evidence_class": "MEASURED",
     "experiment": "H3_sentiment_dimensionality",
     "schema_version": "1.0",
-    "git_commit": "91a88097a2850f5a6707b3b5f90fe98a8057065c",
+    "git_commit": "c3bb79ac3c3bdafbd8b4c8c81a4f181995b7620f",
     "git_dirty": true,
-    "timestamp_utc": "2026-08-28T11:56:35+00:00",
+    "timestamp_utc": "2026-08-28T14:18:00+00:00",
     "hostname": "LAPTOP-LLVL1LSJ",
     "username": "shahoud",
-    "command": "cli.py run-all --no-resume",
+    "command": "cli.py h3-sentiment",
     "python_version": "3.11.4",
     "platform": "Windows-10-10.0.26200-SP0",
-    "config_sha": "ab1cf2ac7cb4",
+    "config_sha": "ebfa0d10c043",
     "seed": 20260428,
     "hardware": {
       "has_cuda": false,
@@ -38,7 +38,7 @@
       "regulatory dimension rarely activated",
       "sentence-level granularity mismatch"
     ],
-    "duration_s": 479.11
+    "duration_s": 503.7
   },
   "experiment": "H3_sentiment_dimensionality",
   "dataset": {
@@ -62,12 +62,13 @@
   "n_samples": 4846,
   "decision_rules": {
     "b3": "direction = map(argmax(market_sentiment))",
-    "multidimensional": "regulatory==negative -> HOLD if market positive else SELL; market==negative and temporal==positive -> HOLD; else map(market)",
+    "multidimensional": "regulatory==negative -> HOLD if market positive else SELL; market==negative and temporal==specific_fls -> HOLD; else map(market)",
     "direction_mapping": {
       "positive": "BUY",
       "neutral": "HOLD",
       "negative": "SELL"
     },
+    "temporal_label_scheme": "fls (not_fls / nonspecific_fls / specific_fls) \u2014 specificity of a forward-looking statement, not sentiment polarity",
     "pre_registered": true
   },
   "routing": {
@@ -80,42 +81,42 @@
   "model_configuration": {
     "market_checkpoint": "ProsusAI/finbert",
     "regulatory_checkpoint": "yiyanghkust/finbert-tone",
-    "temporal_checkpoint": "ProsusAI/finbert",
-    "temporal_shares_checkpoint_with": "market",
-    "n_distinct_checkpoints_loaded": 2,
+    "temporal_checkpoint": "yiyanghkust/finbert-fls",
+    "temporal_label_scheme": "fls",
+    "n_distinct_checkpoints_loaded": 3,
     "quantisation": "none",
     "device": "cpu",
-    "note": "The temporal dimension reuses the market checkpoint. There are two sets of weights, not three."
+    "note": "Three genuinely distinct checkpoints. Temporal previously reused the market checkpoint (finding N3); it now uses yiyanghkust/finbert-fls, a model purpose-built for forward-looking-statement detection, with its own label space."
   },
   "results": {
     "accuracy_b3_pct": 88.96,
-    "accuracy_multidimensional_pct": 88.96,
-    "accuracy_delta_pp": 0.0,
+    "accuracy_multidimensional_pct": 88.217,
+    "accuracy_delta_pp": -0.743,
     "macro_f1_b3_pct": 88.253,
-    "macro_f1_multidimensional_pct": 88.253,
-    "macro_f1_delta_pp": 0.0,
-    "direction_divergence_pct": 0.0,
-    "n_diverged": 0
+    "macro_f1_multidimensional_pct": 86.945,
+    "macro_f1_delta_pp": -1.308,
+    "direction_divergence_pct": 1.548,
+    "n_diverged": 75
   },
   "divergence_analysis": {
-    "n_diverged": 0,
-    "multidimensional_correct_when_diverged": 0,
-    "b3_correct_when_diverged": 0,
-    "both_wrong_when_diverged": 0,
-    "multidimensional_win_rate_pct": null,
+    "n_diverged": 75,
+    "multidimensional_correct_when_diverged": 18,
+    "b3_correct_when_diverged": 54,
+    "both_wrong_when_diverged": 3,
+    "multidimensional_win_rate_pct": 24.0,
     "interpretation": "Of the cases where the two systems disagree, this is how often each was right. A win rate near or below 50% means divergence is not adding decision value."
   },
   "statistics": {
     "accuracy_delta_ci_pp": {
-      "point": 0.0,
-      "lower": 0.0,
-      "upper": 0.0,
+      "point": -0.74,
+      "lower": -1.09,
+      "upper": -0.41,
       "confidence": 0.95,
       "method": "paired-percentile-bootstrap-10000-vectorised"
     },
     "accuracy_permutation_test": {
-      "observed_effect": 0.0,
-      "p_value": 1.0,
+      "observed_effect": -0.0074,
+      "p_value": 0.0002,
       "n_permutations": 10000,
       "alternative": "two-sided",
       "n_pairs": 4846,
@@ -148,18 +149,18 @@
     "multidimensional_vs_gold": {
       "BUY": {
         "BUY": 1255,
-        "HOLD": 86,
-        "SELL": 22
+        "HOLD": 89,
+        "SELL": 19
       },
       "HOLD": {
         "BUY": 287,
-        "HOLD": 2470,
-        "SELL": 122
+        "HOLD": 2488,
+        "SELL": 104
       },
       "SELL": {
         "BUY": 7,
-        "HOLD": 11,
-        "SELL": 586
+        "HOLD": 65,
+        "SELL": 532
       }
     }
   },
@@ -186,21 +187,35 @@
       "remedy": "Complement with a chunk-level evaluation on annotated filing excerpts, accepting that gold labels must then be produced."
     }
   ],
-  "dimension_redundancy": {
-    "temporal_shares_market_checkpoint": true,
+  "dimension_distinctness": {
+    "checkpoints": {
+      "market": "ProsusAI/finbert",
+      "regulatory": "yiyanghkust/finbert-tone",
+      "temporal": "yiyanghkust/finbert-fls"
+    },
+    "n_distinct_checkpoints": 3,
+    "fully_distinct": true,
+    "label_schemes": {
+      "market": "polarity",
+      "regulatory": "polarity",
+      "temporal": "fls"
+    },
+    "temporal_shares_market_checkpoint": false,
+    "temporal_shares_regulatory_checkpoint": false,
+    "regulatory_shares_market_checkpoint": false,
+    "explanation": "n_distinct_checkpoints < 3 means at least one dimension is scored by weights also used elsewhere, which \u2014 as measured previously for temporal/market \u2014 can make a dimension's output deterministically identical to another's rather than independent.",
     "n_temporal_routed": 985,
-    "n_temporal_label_identical_to_market": 985,
-    "temporal_identical_pct": 100.0,
-    "temporal_fully_redundant": true,
-    "unsatisfiable_rules": [
-      "market==negative and temporal==positive"
-    ],
-    "explanation": "The temporal dimension is scored by the market checkpoint. When it is routed the same text as market \u2014 which is always the case at sentence granularity \u2014 deterministic inference forces an identical label. Any rule requiring market and temporal to disagree is then unsatisfiable by construction, so the temporal dimension cannot change a recommendation no matter what the corpus contains. At chunk granularity the two receive different token spans, so the labels can differ; that case is untested here."
+    "temporal_label_distribution": {
+      "specific_fls": 808,
+      "not_fls": 121,
+      "nonspecific_fls": 56
+    },
+    "note": "Supersedes the earlier 'dimension_redundancy' block. That check measured whether temporal's output matched market's output verbatim, which was the correct diagnostic while temporal shared market's checkpoint (finding N3: 985/985 identical). Now that the checkpoints are distinct, per-item label equality is no longer a meaningful redundancy test \u2014 two independent classifiers can legitimately agree on easy cases. What this block checks instead is that the weights themselves are distinct and that the temporal classifier's output is not degenerate (e.g. always 'not_fls')."
   },
   "low_confidence_counts": {
     "market": 232,
     "regulatory": 0,
-    "temporal": 57
+    "temporal": 63
   },
   "hypothesis_tests": [
     {
@@ -209,7 +224,7 @@
       "metric_name": "direction_divergence_rate",
       "scale": "percent",
       "units": "% of texts",
-      "observed": 0.0,
+      "observed": 1.548,
       "threshold": 10.0,
       "comparison": ">",
       "falsifiable_range": [
@@ -226,7 +241,7 @@
       "metric_name": "accuracy_delta_vs_b3",
       "scale": "percentage points",
       "units": "pp",
-      "observed": 0.0,
+      "observed": -0.743,
       "threshold": 0.0,
       "comparison": ">",
       "falsifiable_range": [
@@ -235,10 +250,10 @@
       ],
       "result": "FAIL",
       "sanity_warnings": [],
-      "notes": "Paired bootstrap 95% CI on the accuracy delta: [0.00, 0.00] pp; paired permutation p=1.0000. A positive point estimate whose CI spans zero is not evidence of improvement."
+      "notes": "Paired bootstrap 95% CI on the accuracy delta: [-1.09, -0.41] pp; paired permutation p=0.0002. A positive point estimate whose CI spans zero is not evidence of improvement."
     }
   ],
-  "wall_clock_s": 479.11,
+  "wall_clock_s": 503.7,
   "execution": {
     "device": "cpu",
     "batch_size": 8,
@@ -247,7 +262,7 @@
       "fits": true,
       "device": 0,
       "free_mb": 0.0,
-      "required_mb": 550.0,
+      "required_mb": 800.0,
       "headroom_mb": 0.0,
       "batch_size": 8,
       "max_concurrent_models": 1,

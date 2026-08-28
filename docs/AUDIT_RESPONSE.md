@@ -83,6 +83,44 @@ temporal labels identical to their market label (100.0%), and 0.00% divergence
 over 4,846 sentences. This is the strongest finding produced so far and is a
 genuine negative result.
 
+**N3 follow-up — fixing the redundancy exposed a second, independent defect.**
+The shared checkpoint was replaced with a genuinely different model
+(`yiyanghkust/finbert-fls`, purpose-built for forward-looking-statement
+detection) and re-measured on all 4,846 sentences. The fix worked mechanically:
+three distinct checkpoints, temporal now returns a real, varied distribution
+(82.0% specific, 12.3% not-FLS, 5.7% non-specific — not degenerate), and
+divergence rose from the redundancy artefact of 0.00% to a real 1.548% (75
+cases).
+
+Accuracy, however, **decreased**: 88.96% → 88.22% (−0.74 pp, 95% CI
+[−1.09, −0.41], paired permutation p = 0.0002). The CI excludes zero — this is a
+statistically significant regression, not noise.
+
+The cause is a second design defect, independent of the redundancy: the rule
+("negative market + a *specific* forward commitment → soften to HOLD") assumes
+specificity implies optimism. It does not — a company can commit to a specific
+bad forecast, and finbert-fls's label says nothing about the forecast's
+direction, only its concreteness. At 82% of routed sentences classified
+specific, the rule fires broadly enough to soften many genuinely negative,
+correctly-classified sentences into false HOLDs.
+
+A second, more subtle issue compounds this: at sentence granularity, the
+sentence routed as "temporal" *is* the sentence already scored for "market" —
+they are literally the same text. The rule was designed for the deployed
+pipeline's document-chunk granularity, where a temporal chunk is a genuinely
+different span of a multi-chunk document than the chunks driving the aggregate
+market score. Evaluated on single PhraseBank sentences (necessary because that
+is where gold labels exist — see the granularity-mismatch validity threat), the
+mechanism the rule was designed around does not operate the way it does in the
+deployed pipeline. This is now the dominant open question for the temporal
+dimension, and is not resolved by further threshold-tuning on this dataset,
+which would be overfitting to a single test set rather than a fix.
+
+**No further rule changes were made after seeing this result.** Continuing to
+adjust the rule until the number looks better on the same held-out set is
+exactly the failure mode this project's evidence policy exists to prevent. The
+result is reported as measured, including the fact that it is a regression.
+
 ---
 
 ## Correction to the audit
