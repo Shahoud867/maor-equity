@@ -1,0 +1,18 @@
+# GPU node dependencies. Install torch from the CUDA index BEFORE this file:
+#   pip install torch --index-url https://download.pytorch.org/whl/cu121
+#
+# Installing torch afterwards can silently replace the CUDA build with a
+# CPU-only wheel, which `python -m maor.cli doctor` will report.
+
+-r requirements.txt
+
+# 4-bit / 8-bit quantisation. Required to fit Phi-3-mini on a 4 GB card.
+bitsandbytes>=0.43
+accelerate>=0.30
+
+# BERTScore for H2. Optional: H2 runs without it and reports it as skipped.
+bert-score>=0.3.13
+
+# Distributed execution. Only needed for the cross-node communication
+# measurement; every other experiment runs single-node.
+ray[default]>=2.9

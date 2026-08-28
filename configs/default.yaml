@@ -1,0 +1,81 @@
+# maor-equity default configuration.
+#
+# Every value that can change a measured number lives here. The SHA-256 of this
+# structure is recorded in each result's provenance, so a result can always be
+# traced to the exact setting that produced it.
+#
+# Override on the command line with dotted keys, e.g.
+#   python -m maor.cli h3-sentiment --set execution.device=cuda
+# or point at a whole file with --config configs/gpu_t1000.yaml
+
+models:
+  sentiment_market: ProsusAI/finbert
+  sentiment_regulatory: yiyanghkust/finbert-tone
+  summarizer: microsoft/Phi-3-mini-4k-instruct
+
+  # "none" | "int8" | "nf4".
+  # Default is none so that a measurement is of the model, not of a quantisation
+  # artefact. The GPU config turns this on where the VRAM budget requires it,
+  # and experiments/quantisation_sweep.yaml measures what it costs.
+  sentiment_quantisation: none
+  summarizer_quantisation: nf4
+
+  # Declared expectations, checked against reality by `vram-verify`.
+  sentiment_estimated_vram_mb: 550.0
+  summarizer_estimated_vram_mb: 2800.0
+
+  max_input_tokens: 3500
+  sentiment_max_length: 512
+  sentiment_batch_size: 8
+
+  map_max_new_tokens: 200
+  reduce_max_new_tokens: 400
+  guardrail_max_new_tokens: 200
+
+  # Greedy decoding. Required for the reproducibility claim: sampling would make
+  # every rerun a different experiment.
+  do_sample: false
+  temperature: 0.0
+  trust_remote_code: true
+
+vram:
+  # null = probe the device. Set explicitly only to simulate a smaller card.
+  total_mb: null
+  # Headroom for CUDA context, fragmentation and KV cache growth, none of which
+  # appear in torch.cuda.memory_allocated().
+  usable_fraction: 0.85
+  device: 0
+  enforce: true
+  # Release each model before the next loads. This is what lets a 4 GB card run
+  # both FinBERT and Phi-3-mini.
+  phase_serialised: true
+
+chunking:
+  window_tokens: 512
+  stride_tokens: 64
+  sim_threshold: 0.85
+  max_chunks_8k: 12
+  max_chunks_10k: 20
+  tfidf_max_features: 512
+
+execution:
+  mode: local          # "local" (in-process) | "ray" (cluster)
+  ray_address: null
+  device: auto         # "auto" | "cuda" | "cpu"
+  stage_timeout_s: 1800.0
+  model_load_timeout_s: 900.0
+  seed: 20260428
+  n_repeats: 1
+
+data:
+  ectsum_path: data/ectsum/ectsum_test.jsonl
+  filings_dir: data/sec-edgar-filings
+  phrasebank_config: sentences_75agree
+  # SEC requires a descriptive User-Agent. Override with MAOR_SEC_USER_AGENT.
+  sec_user_agent: "maor-equity research (contact via repository)"
+
+paths:
+  results_dir: results
+  figures_dir: paper/figures
+  tables_dir: paper/tables
+  logs_dir: logs

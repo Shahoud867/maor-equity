@@ -1,0 +1,69 @@
+# NVIDIA T1000, 4,096 MB VRAM — the Node B configuration.
+#
+# Use with:  python -m maor.cli <command> --config configs/gpu_t1000.yaml
+#
+# Only the values that differ from configs/default.yaml appear here; everything
+# else is inherited. The defaults in this file are deliberately conservative:
+# a run that fails fast on a budget check costs a minute, and a run that thrashes
+# CUDA and hangs costs an evening. The original project lost time to the latter.
+
+models:
+  # 4-bit NF4 for the 3.8B summariser is not optional on 4 GB: FP16 would need
+  # ~7.6 GB for weights alone. Double quantisation saves a further ~175 MB by
+  # quantising the quantisation constants.
+  summarizer_quantisation: nf4
+
+  # FinBERT is 110M parameters (~440 MB FP32, ~220 MB FP16). It fits without
+  # quantisation, and leaving it unquantised keeps the sentiment measurement free
+  # of a quantisation confound. experiments/quantisation_sweep.yaml measures what
+  # turning this on would cost in accuracy.
+  sentiment_quantisation: none
+
+  # Declared expectations. `vram-verify` measures the truth and reports the
+  # delta; if the delta is large, correct these numbers rather than the measurement.
+  sentiment_estimated_vram_mb: 550.0
+  summarizer_estimated_vram_mb: 2800.0
+
+  # Keeps the generation window small enough that the KV cache does not grow into
+  # the headroom reserved below.
+  max_input_tokens: 3000
+  map_max_new_tokens: 200
+  reduce_max_new_tokens: 400
+
+  # Batch of 8 x 512 tokens through FinBERT is comfortable at this budget.
+  # Lower to 4 if `vram-verify` shows less headroom than expected.
+  sentiment_batch_size: 8
+
+vram:
+  total_mb: null          # probe the card; do not assume 4,096
+  device: 0
+
+  # 0.78, not the 0.85 default. Measured behaviour on this card: the CUDA context,
+  # allocator fragmentation and KV cache growth are invisible to
+  # torch.cuda.memory_allocated, and the nominal sum of the two models
+  # (550 + 2,800 = 3,350 MB) fits inside 0.85 x 4,096 = 3,482 MB on paper while
+  # failing in practice. The lower fraction encodes that gap rather than
+  # rediscovering it as an OOM mid-run.
+  usable_fraction: 0.78
+
+  enforce: true
+
+  # Required at this budget. With phase serialisation the peak is
+  # max(sentiment, summariser) rather than their sum, which is the difference
+  # between fitting and not.
+  phase_serialised: true
+
+execution:
+  device: cuda
+  mode: local             # switch to "ray" only after `verify-cluster` passes
+
+  # Nothing runs unbounded. A wedged CUDA call should fail the run and leave a
+  # log, not hold the GPU overnight.
+  stage_timeout_s: 2400.0
+  model_load_timeout_s: 1200.0
+
+  seed: 20260428
+
+  # H1 needs repeats to report an interval rather than a point estimate.
+  # The audit's finding M5 was n=2, one run each, no variance.
+  n_repeats: 5

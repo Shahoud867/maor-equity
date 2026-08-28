@@ -1,0 +1,43 @@
+# Smoke configuration: exercises every code path in minutes, not hours.
+#
+#   python -m maor.cli <command> --config configs/smoke.yaml
+#
+# The purpose is to prove the wiring works before committing GPU hours. Numbers
+# produced under this config are NOT results: sample sizes are far too small and
+# generation budgets are truncated. `maor.cli` still stamps them MEASURED because
+# they were genuinely measured, but the sample-size interpretation in the result
+# file will read "anecdote", and the readiness checklist treats smoke output as
+# a wiring check only.
+
+models:
+  summarizer_quantisation: nf4
+  sentiment_quantisation: none
+
+  # Short generations so a full pass takes minutes.
+  map_max_new_tokens: 48
+  reduce_max_new_tokens: 96
+  guardrail_max_new_tokens: 64
+  max_input_tokens: 1024
+  sentiment_batch_size: 4
+
+vram:
+  total_mb: null
+  usable_fraction: 0.78
+  phase_serialised: true
+  enforce: true
+
+chunking:
+  # Small windows so a short document still produces enough chunks for the
+  # filter and the map-reduce to engage.
+  window_tokens: 128
+  stride_tokens: 32
+  max_chunks_8k: 4
+  max_chunks_10k: 4
+
+execution:
+  device: auto
+  mode: local
+  stage_timeout_s: 600.0
+  model_load_timeout_s: 900.0
+  seed: 20260428
+  n_repeats: 1
