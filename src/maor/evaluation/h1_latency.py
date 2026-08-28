@@ -159,6 +159,20 @@ def run_h1(
             for kind, seconds in r.recorder.by_kind().items():
                 kinds.setdefault(kind, []).append(seconds)
 
+        # Present only for distributed runs (DistributedRunOutcome.node_hosts,
+        # threaded through RunOutcome.metadata). Two distinct hostnames for a
+        # role confirms the run actually spanned two machines; one hostname
+        # repeated means every actor landed on the same node regardless of
+        # what the cluster topology reported, and the timing here should be
+        # read as actor overhead, not network cost.
+        observed_hosts: dict[str, set[str]] = {}
+        for r in runs:
+            hosts = r.metadata.get("node_hosts") if r.metadata else None
+            if not hosts:
+                continue
+            for role, host in hosts.items():
+                observed_hosts.setdefault(role, set()).add(host)
+
         condition_summaries[name] = {
             "condition": runs[0].condition.to_dict(),
             "n_runs": len(runs),
@@ -173,6 +187,16 @@ def run_h1(
                 )
                 for t in sorted({r.ticker for r in runs})
             },
+            "observed_node_hosts": (
+                {role: sorted(hosts) for role, hosts in observed_hosts.items()}
+                if observed_hosts
+                else None
+            ),
+            "genuinely_cross_machine": (
+                len({h for hosts in observed_hosts.values() for h in hosts}) > 1
+                if observed_hosts
+                else None
+            ),
         }
 
     contrasts = _contrasts(by_condition, seed=seed, n_resamples=n_resamples)

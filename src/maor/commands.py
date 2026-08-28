@@ -440,7 +440,13 @@ def h1_latency(
             repeat=repeat,
             total_s=time.perf_counter() - t0,
             recorder=output.recorder,
-            metadata={"warnings": output.warnings},
+            metadata={
+                "warnings": output.warnings,
+                # Only DistributedRunOutcome carries this; absent for local runs.
+                # Two distinct hostnames here is the confirmation a "distributed"
+                # run actually touched two machines, not one.
+                "node_hosts": getattr(output, "node_hosts", None),
+            },
         )
 
     with Timer() as timer:
