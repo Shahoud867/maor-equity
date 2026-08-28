@@ -258,3 +258,85 @@ class TestDistributedFactorGuard:
         with pytest.raises(NotImplementedError) as exc:
             Pipeline(Config.load(), device="cpu", distributed=True)
         assert "--ablation local" in str(exc.value)
+
+
+class TestCrossMachineVerification:
+    """Confirms a 'distributed' condition actually touched two hosts.
+
+    Complements the guard in test_distributed.py: that guard prevents
+    distributed=True from silently running single-node code; this one confirms
+    that when it does connect to a cluster, the result records enough evidence
+    to tell whether the cluster had two distinct machines or one.
+    """
+
+    def _executor_with_hosts(self, hosts_by_condition: dict[str, dict[str, str]]):
+        def execute(condition: Condition, ticker: str, repeat: int) -> RunOutcome:
+            rec = StageRecorder()
+            with rec.stage("work", kind="compute"):
+                pass
+            return RunOutcome(
+                condition=condition,
+                ticker=ticker,
+                repeat=repeat,
+                total_s=1.0,
+                recorder=rec,
+                metadata={"node_hosts": hosts_by_condition.get(condition.name)},
+            )
+
+        return execute
+
+    def test_two_distinct_hosts_marked_genuinely_cross_machine(self):
+        execute = self._executor_with_hosts(
+            {
+                "serial_filter_warm": {
+                    "ingestion": "node-a", "sentiment": "node-a", "summariser": "node-a",
+                },
+                "distributed_filter_warm": {
+                    "ingestion": "node-a", "sentiment": "node-b", "summariser": "node-b",
+                },
+            }
+        )
+        analysis = run_h1(
+            execute=execute,
+            tickers=["AAPL"],
+            conditions=[
+                Condition(distributed=False, filter_enabled=True, warm_start=True),
+                Condition(distributed=True, filter_enabled=True, warm_start=True),
+            ],
+            n_repeats=1,
+            n_resamples=200,
+        )
+        dist = analysis["conditions"]["distributed_filter_warm"]
+        assert dist["genuinely_cross_machine"] is True
+        assert dist["observed_node_hosts"]["sentiment"] == ["node-b"]
+
+    def test_single_host_flagged_as_not_cross_machine(self):
+        execute = self._executor_with_hosts(
+            {
+                "distributed_filter_warm": {
+                    "ingestion": "node-a", "sentiment": "node-a", "summariser": "node-a",
+                },
+            }
+        )
+        analysis = run_h1(
+            execute=execute,
+            tickers=["AAPL"],
+            conditions=[Condition(distributed=True, filter_enabled=True, warm_start=True)],
+            n_repeats=1,
+            n_resamples=200,
+        )
+        dist = analysis["conditions"]["distributed_filter_warm"]
+        assert dist["genuinely_cross_machine"] is False
+
+    def test_absent_node_hosts_does_not_crash_local_runs(self):
+        """Local (non-distributed) runs never set node_hosts; must not error."""
+        analysis = run_h1(
+            execute=make_executor(),
+            tickers=["AAPL"],
+            conditions=[Condition(distributed=False, filter_enabled=True, warm_start=True)],
+            n_repeats=1,
+            n_resamples=200,
+        )
+        cond = analysis["conditions"]["serial_filter_warm"]
+        assert cond["observed_node_hosts"] is None
+        assert cond["genuinely_cross_machine"] is None
