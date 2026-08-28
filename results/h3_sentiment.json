@@ -1,0 +1,242 @@
+{
+  "_provenance": {
+    "evidence_class": "MEASURED",
+    "experiment": "H3_sentiment_dimensionality",
+    "schema_version": "1.0",
+    "git_commit": "9112be887495d91fccbf464a2ffcc0e503fb63b3",
+    "git_dirty": true,
+    "timestamp_utc": "2026-08-28T08:20:55+00:00",
+    "hostname": "LAPTOP-LLVL1LSJ",
+    "username": "shahoud",
+    "command": "cli.py h3-sentiment",
+    "python_version": "3.11.4",
+    "platform": "Windows-10-10.0.26200-SP0",
+    "config_sha": "ab1cf2ac7cb4",
+    "seed": 20260428,
+    "hardware": {
+      "has_cuda": false,
+      "gpus": [],
+      "cpu_count": 12,
+      "total_ram_mb": 20151.4,
+      "platform": "Windows-10-10.0.26200-SP0",
+      "torch_version": "2.11.0+cpu",
+      "cuda_version": null
+    },
+    "library_versions": {
+      "torch": "2.11.0+cpu",
+      "transformers": "5.16.1",
+      "numpy": "2.4.4",
+      "sklearn": "1.8.0",
+      "scipy": "1.17.1",
+      "rouge_score": "unknown",
+      "datasets": "5.0.1",
+      "ray": "not-installed"
+    },
+    "derived_from": [],
+    "caveats": [
+      "train-on-test contamination",
+      "regulatory dimension rarely activated",
+      "sentence-level granularity mismatch"
+    ],
+    "duration_s": 495.41
+  },
+  "experiment": "H3_sentiment_dimensionality",
+  "dataset": {
+    "dataset": "Financial PhraseBank (Malo et al., 2014)",
+    "repo": "warwickai/financial_phrasebank_mirror",
+    "loaded_split": "train",
+    "identified_agreement_split": "sentences_50agree",
+    "n_rows_total": 4846,
+    "label_distribution": {
+      "negative": 604,
+      "neutral": 2879,
+      "positive": 1363
+    },
+    "label_mapping": {
+      "0": "negative",
+      "1": "neutral",
+      "2": "positive"
+    },
+    "note": "Loaded from a Parquet mirror because the upstream dataset uses a loading script that datasets>=4 will not execute. Split identity verified by row count and label distribution, not by repo name."
+  },
+  "n_samples": 4846,
+  "decision_rules": {
+    "b3": "direction = map(argmax(market_sentiment))",
+    "multidimensional": "regulatory==negative -> HOLD if market positive else SELL; market==negative and temporal==positive -> HOLD; else map(market)",
+    "direction_mapping": {
+      "positive": "BUY",
+      "neutral": "HOLD",
+      "negative": "SELL"
+    },
+    "pre_registered": true
+  },
+  "routing": {
+    "router_type": "lexical-regex",
+    "n_regulatory_matched": 8,
+    "n_temporal_matched": 985,
+    "regulatory_coverage_pct": 0.17,
+    "temporal_coverage_pct": 20.33
+  },
+  "model_configuration": {
+    "market_checkpoint": "ProsusAI/finbert",
+    "regulatory_checkpoint": "yiyanghkust/finbert-tone",
+    "temporal_checkpoint": "ProsusAI/finbert",
+    "temporal_shares_checkpoint_with": "market",
+    "n_distinct_checkpoints_loaded": 2,
+    "quantisation": "none",
+    "device": "cpu",
+    "note": "The temporal dimension reuses the market checkpoint. There are two sets of weights, not three."
+  },
+  "results": {
+    "accuracy_b3_pct": 88.96,
+    "accuracy_multidimensional_pct": 88.96,
+    "accuracy_delta_pp": 0.0,
+    "macro_f1_b3_pct": 88.253,
+    "macro_f1_multidimensional_pct": 88.253,
+    "macro_f1_delta_pp": 0.0,
+    "direction_divergence_pct": 0.0,
+    "n_diverged": 0
+  },
+  "divergence_analysis": {
+    "n_diverged": 0,
+    "multidimensional_correct_when_diverged": 0,
+    "b3_correct_when_diverged": 0,
+    "both_wrong_when_diverged": 0,
+    "multidimensional_win_rate_pct": null,
+    "interpretation": "Of the cases where the two systems disagree, this is how often each was right. A win rate near or below 50% means divergence is not adding decision value."
+  },
+  "statistics": {
+    "accuracy_delta_ci_pp": {
+      "point": 0.0,
+      "lower": 0.0,
+      "upper": 0.0,
+      "confidence": 0.95,
+      "method": "paired-percentile-bootstrap-10000-vectorised"
+    },
+    "accuracy_permutation_test": {
+      "observed_effect": 0.0,
+      "p_value": 1.0,
+      "n_permutations": 10000,
+      "alternative": "two-sided",
+      "n_pairs": 4846,
+      "method": "paired-sign-flip-permutation"
+    },
+    "sample_size_interpretation": {
+      "n": 4846,
+      "evidence_level": "adequate",
+      "supportable_claim": "Supports a population-level claim with bootstrap intervals for this population."
+    }
+  },
+  "confusion_matrices": {
+    "b3_vs_gold": {
+      "BUY": {
+        "BUY": 1255,
+        "HOLD": 86,
+        "SELL": 22
+      },
+      "HOLD": {
+        "BUY": 287,
+        "HOLD": 2470,
+        "SELL": 122
+      },
+      "SELL": {
+        "BUY": 7,
+        "HOLD": 11,
+        "SELL": 586
+      }
+    },
+    "multidimensional_vs_gold": {
+      "BUY": {
+        "BUY": 1255,
+        "HOLD": 86,
+        "SELL": 22
+      },
+      "HOLD": {
+        "BUY": 287,
+        "HOLD": 2470,
+        "SELL": 122
+      },
+      "SELL": {
+        "BUY": 7,
+        "HOLD": 11,
+        "SELL": 586
+      }
+    }
+  },
+  "validity_threats": [
+    {
+      "severity": "critical",
+      "threat": "train-on-test contamination",
+      "detail": "ProsusAI/finbert is fine-tuned on Financial PhraseBank (Araci 2019; see the model card). Evaluating it on PhraseBank measures memorisation of the training set, not generalisation. Absolute accuracy figures from this run are NOT valid estimates of field performance and must not be reported as such.",
+      "what_remains_valid": "The B3-vs-multidimensional comparison is a within-run contrast: both arms use the same contaminated market model, so the divergence rate and the accuracy delta between arms are still interpretable as the effect of adding dimensions. The absolute levels are not.",
+      "remedy": "For a generalisation claim, evaluate on a corpus disjoint from PhraseBank \u2014 e.g. FiQA sentiment, SemEval-2017 Task 5, or hand-labelled 8-K excerpts \u2014 or use a market checkpoint not trained on PhraseBank."
+    },
+    {
+      "severity": "major",
+      "threat": "regulatory dimension rarely activated",
+      "detail": "Only 8/4846 texts (0.2%) matched the regulatory router, so the veto rule affects too few cases to support a claim in either direction.",
+      "what_remains_valid": "The overall accuracy comparison, with wide uncertainty.",
+      "remedy": "Use a corpus with more regulatory content, or stratify and report separately."
+    },
+    {
+      "severity": "major",
+      "threat": "sentence-level granularity mismatch",
+      "detail": "The deployed pipeline routes 512-token filing chunks; this evaluation routes single sentences. A sentence rarely carries both market and regulatory content, which structurally suppresses the interaction the multi-dimensional rule is designed to capture.",
+      "what_remains_valid": "The comparison is valid at sentence granularity, which is the only granularity at which gold sentiment labels exist for this corpus.",
+      "remedy": "Complement with a chunk-level evaluation on annotated filing excerpts, accepting that gold labels must then be produced."
+    }
+  ],
+  "dimension_redundancy": {
+    "temporal_shares_market_checkpoint": true,
+    "n_temporal_routed": 985,
+    "n_temporal_label_identical_to_market": 985,
+    "temporal_identical_pct": 100.0,
+    "temporal_fully_redundant": true,
+    "unsatisfiable_rules": [
+      "market==negative and temporal==positive"
+    ],
+    "explanation": "The temporal dimension is scored by the market checkpoint. When it is routed the same text as market \u2014 which is always the case at sentence granularity \u2014 deterministic inference forces an identical label. Any rule requiring market and temporal to disagree is then unsatisfiable by construction, so the temporal dimension cannot change a recommendation no matter what the corpus contains. At chunk granularity the two receive different token spans, so the labels can differ; that case is untested here."
+  },
+  "low_confidence_counts": {
+    "market": 232,
+    "regulatory": 0,
+    "temporal": 57
+  },
+  "hypothesis_tests": [
+    {
+      "hypothesis_id": "H3a",
+      "claim": "Multi-dimensional sentiment changes the directional recommendation in >10% of texts versus the scalar B3 baseline",
+      "metric_name": "direction_divergence_rate",
+      "scale": "percent",
+      "units": "% of texts",
+      "observed": 0.0,
+      "threshold": 10.0,
+      "comparison": ">",
+      "falsifiable_range": [
+        0.0,
+        100.0
+      ],
+      "result": "FAIL",
+      "sanity_warnings": [],
+      "notes": "Descriptive only. Divergence is not itself evidence of quality: a rule that flips answers at random would score highly here. H3b is the decision-relevant test."
+    },
+    {
+      "hypothesis_id": "H3b",
+      "claim": "Multi-dimensional sentiment is more accurate than scalar B3 against Financial PhraseBank gold labels",
+      "metric_name": "accuracy_delta_vs_b3",
+      "scale": "percentage points",
+      "units": "pp",
+      "observed": 0.0,
+      "threshold": 0.0,
+      "comparison": ">",
+      "falsifiable_range": [
+        -100.0,
+        100.0
+      ],
+      "result": "FAIL",
+      "sanity_warnings": [],
+      "notes": "Paired bootstrap 95% CI on the accuracy delta: [0.00, 0.00] pp; paired permutation p=1.0000. A positive point estimate whose CI spans zero is not evidence of improvement."
+    }
+  ],
+  "wall_clock_s": 495.41
+}

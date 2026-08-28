@@ -1,0 +1,447 @@
+{
+  "_provenance": {
+    "evidence_class": "MEASURED",
+    "experiment": "chunk_filter_study",
+    "schema_version": "1.0",
+    "git_commit": "9112be887495d91fccbf464a2ffcc0e503fb63b3",
+    "git_dirty": true,
+    "timestamp_utc": "2026-08-28T08:21:56+00:00",
+    "hostname": "LAPTOP-LLVL1LSJ",
+    "username": "shahoud",
+    "command": "cli.py chunk-filter --n-documents 120",
+    "python_version": "3.11.4",
+    "platform": "Windows-10-10.0.26200-SP0",
+    "config_sha": "ab1cf2ac7cb4",
+    "seed": 20260428,
+    "hardware": {
+      "has_cuda": false,
+      "gpus": [],
+      "cpu_count": 12,
+      "total_ram_mb": 20151.4,
+      "platform": "Windows-10-10.0.26200-SP0",
+      "torch_version": "2.11.0+cpu",
+      "cuda_version": null
+    },
+    "library_versions": {
+      "torch": "2.11.0+cpu",
+      "transformers": "5.16.1",
+      "numpy": "2.4.4",
+      "sklearn": "1.8.0",
+      "scipy": "1.17.1",
+      "rouge_score": "unknown",
+      "datasets": "5.0.1",
+      "ray": "not-installed"
+    },
+    "derived_from": [],
+    "caveats": [],
+    "duration_s": 23.49
+  },
+  "experiment": "chunk_filter_cost_and_coverage",
+  "dataset": {
+    "dataset": "ECTSum (Mukherjee et al., EMNLP 2022)",
+    "path": "data/ectsum/ectsum_test.jsonl",
+    "n_rows_total": 495,
+    "n_malformed_skipped": 0,
+    "mean_document_words": 2818.1,
+    "mean_reference_words": 42.7,
+    "max_document_words": 8439,
+    "subsampled_to": 120,
+    "subsample_seed": 20260428
+  },
+  "chunking": {
+    "window_tokens": 512,
+    "stride_tokens": 64,
+    "overlap_pct": 87.5,
+    "sim_threshold": 0.85,
+    "tokenizer": "whitespace",
+    "tokenizer_note": "Whitespace tokenisation approximates subword boundaries. Token counts are therefore approximate; chunk counts and relative comparisons across caps are unaffected."
+  },
+  "cost_coverage_curve": [
+    {
+      "max_chunks": 4,
+      "n_documents": 120,
+      "mean_chunks_after": 3.99,
+      "reduction_pct": {
+        "n": 120,
+        "mean": 86.9215,
+        "median": 88.89,
+        "min": 0.0,
+        "max": 96.8,
+        "stdev": 9.4875,
+        "cv": 0.1092
+      },
+      "filter_cost_ms": {
+        "n": 120,
+        "mean": 39.3953,
+        "median": 14.1507,
+        "min": 0.0005,
+        "max": 2907.3991,
+        "stdev": 264.1015,
+        "cv": 6.7039
+      },
+      "filter_cost_ms_ci": {
+        "point": 14.1507,
+        "lower": 13.5762,
+        "upper": 15.1331,
+        "confidence": 0.95,
+        "n": 120,
+        "method": "percentile-bootstrap-2000-vectorised"
+      },
+      "vocabulary_retained_pct": {
+        "n": 120,
+        "mean": 60.0196,
+        "median": 59.42,
+        "min": 26.95,
+        "max": 100.0,
+        "stdev": 13.2517,
+        "cv": 0.2208
+      },
+      "document_positions_retained_pct": {
+        "n": 120,
+        "mean": 46.7287,
+        "median": 43.595,
+        "min": 15.93,
+        "max": 100.0,
+        "stdev": 15.5463,
+        "cv": 0.3327
+      }
+    },
+    {
+      "max_chunks": 8,
+      "n_documents": 120,
+      "mean_chunks_after": 7.94,
+      "reduction_pct": {
+        "n": 120,
+        "mean": 74.8029,
+        "median": 77.78,
+        "min": 0.0,
+        "max": 93.6,
+        "stdev": 11.952,
+        "cv": 0.1598
+      },
+      "filter_cost_ms": {
+        "n": 120,
+        "mean": 19.9041,
+        "median": 18.6773,
+        "min": 0.0003,
+        "max": 53.968,
+        "stdev": 6.2363,
+        "cv": 0.3133
+      },
+      "filter_cost_ms_ci": {
+        "point": 18.6773,
+        "lower": 17.8617,
+        "upper": 20.0433,
+        "confidence": 0.95,
+        "n": 120,
+        "method": "percentile-bootstrap-2000-vectorised"
+      },
+      "vocabulary_retained_pct": {
+        "n": 120,
+        "mean": 78.4667,
+        "median": 76.61,
+        "min": 41.25,
+        "max": 100.0,
+        "stdev": 12.1568,
+        "cv": 0.1549
+      },
+      "document_positions_retained_pct": {
+        "n": 120,
+        "mean": 70.0665,
+        "median": 68.065,
+        "min": 28.82,
+        "max": 100.0,
+        "stdev": 16.0031,
+        "cv": 0.2284
+      }
+    },
+    {
+      "max_chunks": 12,
+      "n_documents": 120,
+      "mean_chunks_after": 11.3,
+      "reduction_pct": {
+        "n": 120,
+        "mean": 65.8312,
+        "median": 66.67,
+        "min": 0.0,
+        "max": 90.4,
+        "stdev": 10.9793,
+        "cv": 0.1668
+      },
+      "filter_cost_ms": {
+        "n": 120,
+        "mean": 24.853,
+        "median": 24.3658,
+        "min": 0.0003,
+        "max": 64.9308,
+        "stdev": 7.7823,
+        "cv": 0.3131
+      },
+      "filter_cost_ms_ci": {
+        "point": 24.3658,
+        "lower": 22.9767,
+        "upper": 25.429,
+        "confidence": 0.95,
+        "n": 120,
+        "method": "percentile-bootstrap-2000-vectorised"
+      },
+      "vocabulary_retained_pct": {
+        "n": 120,
+        "mean": 87.9484,
+        "median": 87.225,
+        "min": 59.81,
+        "max": 100.0,
+        "stdev": 8.9807,
+        "cv": 0.1021
+      },
+      "document_positions_retained_pct": {
+        "n": 120,
+        "mean": 83.7449,
+        "median": 82.975,
+        "min": 48.28,
+        "max": 100.0,
+        "stdev": 12.3133,
+        "cv": 0.147
+      }
+    },
+    {
+      "max_chunks": 16,
+      "n_documents": 120,
+      "mean_chunks_after": 13.88,
+      "reduction_pct": {
+        "n": 120,
+        "mean": 58.7879,
+        "median": 59.32,
+        "min": 0.0,
+        "max": 87.2,
+        "stdev": 14.0408,
+        "cv": 0.2388
+      },
+      "filter_cost_ms": {
+        "n": 120,
+        "mean": 28.6439,
+        "median": 28.5485,
+        "min": 0.0004,
+        "max": 92.2735,
+        "stdev": 12.0959,
+        "cv": 0.4223
+      },
+      "filter_cost_ms_ci": {
+        "point": 28.5485,
+        "lower": 26.7917,
+        "upper": 30.0926,
+        "confidence": 0.95,
+        "n": 120,
+        "method": "percentile-bootstrap-2000-vectorised"
+      },
+      "vocabulary_retained_pct": {
+        "n": 120,
+        "mean": 94.0209,
+        "median": 96.41,
+        "min": 66.28,
+        "max": 100.0,
+        "stdev": 6.3807,
+        "cv": 0.0679
+      },
+      "document_positions_retained_pct": {
+        "n": 120,
+        "mean": 92.0677,
+        "median": 95.27,
+        "min": 55.36,
+        "max": 100.0,
+        "stdev": 8.8018,
+        "cv": 0.0956
+      }
+    },
+    {
+      "max_chunks": 20,
+      "n_documents": 120,
+      "mean_chunks_after": 15.65,
+      "reduction_pct": {
+        "n": 120,
+        "mean": 53.0779,
+        "median": 58.235,
+        "min": 0.0,
+        "max": 84.0,
+        "stdev": 19.2256,
+        "cv": 0.3622
+      },
+      "filter_cost_ms": {
+        "n": 120,
+        "mean": 29.515,
+        "median": 29.9068,
+        "min": 0.0003,
+        "max": 63.9705,
+        "stdev": 14.4312,
+        "cv": 0.4889
+      },
+      "filter_cost_ms_ci": {
+        "point": 29.9068,
+        "lower": 27.6889,
+        "upper": 31.7828,
+        "confidence": 0.95,
+        "n": 120,
+        "method": "percentile-bootstrap-2000-vectorised"
+      },
+      "vocabulary_retained_pct": {
+        "n": 120,
+        "mean": 96.8773,
+        "median": 98.145,
+        "min": 69.74,
+        "max": 100.0,
+        "stdev": 4.5583,
+        "cv": 0.0471
+      },
+      "document_positions_retained_pct": {
+        "n": 120,
+        "mean": 96.0127,
+        "median": 97.545,
+        "min": 60.67,
+        "max": 100.0,
+        "stdev": 6.1662,
+        "cv": 0.0642
+      }
+    },
+    {
+      "max_chunks": 32,
+      "n_documents": 120,
+      "mean_chunks_after": 20.73,
+      "reduction_pct": {
+        "n": 120,
+        "mean": 36.0,
+        "median": 55.56,
+        "min": 0.0,
+        "max": 74.4,
+        "stdev": 29.1359,
+        "cv": 0.8093
+      },
+      "filter_cost_ms": {
+        "n": 120,
+        "mean": 24.3533,
+        "median": 29.8671,
+        "min": 0.0003,
+        "max": 86.5117,
+        "stdev": 22.1933,
+        "cv": 0.9113
+      },
+      "filter_cost_ms_ci": {
+        "point": 29.8671,
+        "lower": 26.5989,
+        "upper": 32.1148,
+        "confidence": 0.95,
+        "n": 120,
+        "method": "percentile-bootstrap-2000-vectorised"
+      },
+      "vocabulary_retained_pct": {
+        "n": 120,
+        "mean": 98.665,
+        "median": 99.915,
+        "min": 86.57,
+        "max": 100.0,
+        "stdev": 2.0514,
+        "cv": 0.0208
+      },
+      "document_positions_retained_pct": {
+        "n": 120,
+        "mean": 98.4858,
+        "median": 99.75,
+        "min": 81.91,
+        "max": 100.0,
+        "stdev": 2.434,
+        "cv": 0.0247
+      }
+    }
+  ],
+  "summary": {
+    "n_documents": 120,
+    "chunks_per_document": {
+      "n": 120,
+      "mean": 37.5833,
+      "median": 36.0,
+      "min": 3,
+      "max": 125,
+      "stdev": 16.6186,
+      "cv": 0.4422
+    },
+    "words_per_document": {
+      "n": 120,
+      "mean": 2823.175,
+      "median": 2727.0,
+      "min": 579,
+      "max": 8439,
+      "stdev": 1064.141,
+      "cv": 0.3769
+    },
+    "filter_cost_ms_overall": {
+      "n": 720,
+      "mean": 27.7775,
+      "median": 22.9483,
+      "min": 0.0003,
+      "max": 2907.3991,
+      "stdev": 108.3404,
+      "cv": 3.9003
+    },
+    "default_cap_row": {
+      "max_chunks": 12,
+      "n_documents": 120,
+      "mean_chunks_after": 11.3,
+      "reduction_pct": {
+        "n": 120,
+        "mean": 65.8312,
+        "median": 66.67,
+        "min": 0.0,
+        "max": 90.4,
+        "stdev": 10.9793,
+        "cv": 0.1668
+      },
+      "filter_cost_ms": {
+        "n": 120,
+        "mean": 24.853,
+        "median": 24.3658,
+        "min": 0.0003,
+        "max": 64.9308,
+        "stdev": 7.7823,
+        "cv": 0.3131
+      },
+      "filter_cost_ms_ci": {
+        "point": 24.3658,
+        "lower": 22.9767,
+        "upper": 25.429,
+        "confidence": 0.95,
+        "n": 120,
+        "method": "percentile-bootstrap-2000-vectorised"
+      },
+      "vocabulary_retained_pct": {
+        "n": 120,
+        "mean": 87.9484,
+        "median": 87.225,
+        "min": 59.81,
+        "max": 100.0,
+        "stdev": 8.9807,
+        "cv": 0.1021
+      },
+      "document_positions_retained_pct": {
+        "n": 120,
+        "mean": 83.7449,
+        "median": 82.975,
+        "min": 48.28,
+        "max": 100.0,
+        "stdev": 12.3133,
+        "cv": 0.147
+      }
+    }
+  },
+  "gpu_saving_arithmetic": {
+    "status": "NOT COMPUTED \u2014 requires a measured per-chunk generation cost",
+    "explanation": "Saved GPU time = (chunks_removed) x (seconds per chunk). The second factor must come from a measured Phi-3-mini generation cost on the target GPU. The original analysis assumed 15 s/chunk and reported 690 s and 1,575 s saved as if measured.",
+    "coefficients_available": {
+      "mean_chunks_removed_at_cap_12": 26.28
+    },
+    "how_to_complete": "Run `maor.cli h1-latency` on the GPU node to obtain measured seconds-per-chunk, then multiply."
+  },
+  "interpretation": {
+    "filter_cost": "Measured wall-clock cost of the filter itself, to replace the unmeasured '~80 ms' figure in the paper.",
+    "coverage": "Vocabulary and document-position retention quantify what the filter discards. High retention supports the claim that removed chunks were near-duplicates created by the 87.5% window overlap; low retention would mean the filter is dropping content and the H2 quality comparison is confounded."
+  },
+  "wall_clock_s": 23.49
+}
