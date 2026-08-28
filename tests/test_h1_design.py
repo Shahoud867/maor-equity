@@ -1,0 +1,208 @@
+"""Tests for the H1 factorial design and its analysis.
+
+The executor is injected, so the whole analysis path — contrasts, Amdahl bound,
+hypothesis test — is verifiable on CPU with a deterministic stub. This is what
+lets the GPU run be a measurement rather than a debugging session.
+
+The stub encodes a workload shaped like the real one: summarisation dominates,
+and it is sequential on a single GPU actor.
+"""
+
+from __future__ import annotations
+
+import pytest
+
+from maor.evaluation.h1_latency import (
+    Condition,
+    RunOutcome,
+    default_conditions,
+    run_h1,
+)
+from maor.pipeline.instrumentation import StageRecorder
+
+
+def make_executor(
+    *,
+    base_summarise_s: float = 100.0,
+    sentiment_s: float = 8.0,
+    ingestion_s: float = 3.0,
+    model_load_s: float = 30.0,
+    filter_speedup: float = 4.0,
+    distribution_overhead_s: float = 1.0,
+):
+    """Build a deterministic executor with a realistic cost structure.
+
+    Summarisation dominates and does not parallelise across two nodes, which is
+    the structural fact that bounds any achievable speedup.
+    """
+
+    def execute(condition: Condition, ticker: str, repeat: int) -> RunOutcome:
+        rec = StageRecorder()
+
+        with rec.stage("ingestion", kind="io"):
+            pass
+        if not condition.warm_start:
+            with rec.stage("model_load", kind="model_load"):
+                pass
+        with rec.stage("chunk_filter", kind="compute", parallelisable=False):
+            pass
+        with rec.stage("sentiment", kind="compute", parallelisable=True):
+            pass
+        with rec.stage("summarise", kind="compute", parallelisable=False):
+            pass
+        if condition.distributed:
+            with rec.stage("put_get_payload", kind="communication"):
+                pass
+
+        summarise_s = base_summarise_s / (filter_speedup if condition.filter_enabled else 1.0)
+        total = ingestion_s + summarise_s
+        total += 0.0 if condition.warm_start else model_load_s
+        # Sentiment overlaps with other work only when distributed.
+        total += 0.0 if condition.distributed else sentiment_s
+        total += distribution_overhead_s if condition.distributed else 0.0
+
+        # Attribute synthetic durations onto the recorded stages so the
+        # by-kind accounting is exercised.
+        for stage in rec.stages:
+            stage.seconds = {
+                "ingestion": ingestion_s,
+                "model_load": 0.0 if condition.warm_start else model_load_s,
+                "chunk_filter": 0.1,
+                "sentiment": 0.0 if condition.distributed else sentiment_s,
+                "summarise": summarise_s,
+                "put_get_payload": distribution_overhead_s,
+            }.get(stage.name, stage.seconds)
+
+        return RunOutcome(
+            condition=condition, ticker=ticker, repeat=repeat, total_s=total, recorder=rec
+        )
+
+    return execute
+
+
+class TestFactorialDesign:
+    def test_default_design_crosses_execution_and_filtering(self):
+        conditions = default_conditions(include_cold=False)
+        names = {c.name for c in conditions}
+        assert names == {
+            "serial_filter_warm",
+            "serial_nofilter_warm",
+            "distributed_filter_warm",
+            "distributed_nofilter_warm",
+        }
+
+    def test_cold_conditions_are_added_for_model_load_isolation(self):
+        names = {c.name for c in default_conditions(include_cold=True)}
+        assert "serial_filter_cold" in names
+
+
+class TestContrasts:
+    @pytest.fixture
+    def analysis(self):
+        return run_h1(
+            execute=make_executor(),
+            tickers=["AAPL", "MSFT"],
+            n_repeats=3,
+            n_resamples=500,
+        )
+
+    def test_filter_effect_is_measured_on_both_arms(self, analysis):
+        """B1 also had the filter, so it must be measurable independently."""
+        contrasts = analysis["contrasts"]
+        assert "filter_effect_serial" in contrasts
+        assert "filter_effect_distributed" in contrasts
+        # Filtering cuts summarisation, so it must help both arms.
+        assert contrasts["filter_effect_serial"]["speedup"] > 1.0
+        assert contrasts["filter_effect_distributed"]["speedup"] > 1.0
+
+    def test_distribution_effect_is_isolated_from_filtering_and_warmth(self, analysis):
+        c = analysis["contrasts"]["distribution_effect_warm_filtered"]
+        assert c["treatment_condition"] == "distributed_filter_warm"
+        assert c["control_condition"] == "serial_filter_warm"
+        # Only sentiment overlaps, so the gain is small — the honest shape.
+        assert 1.0 < c["speedup"] < 1.3
+
+    def test_warm_start_effect_is_its_own_factor(self, analysis):
+        """Model-load amortisation must not be credited to distribution."""
+        c = analysis["contrasts"]["warm_start_effect_serial"]
+        assert c["speedup"] > 1.0
+        assert "amortisation" in c["explanation"]
+
+    def test_contrasts_carry_confidence_intervals(self, analysis):
+        for contrast in analysis["contrasts"].values():
+            assert "delta_ci_s" in contrast
+            ci = contrast["delta_ci_s"]
+            assert ci["lower"] <= ci["point"] <= ci["upper"]
+
+
+class TestParallelismCeiling:
+    def test_amdahl_bound_is_reported(self):
+        analysis = run_h1(
+            execute=make_executor(),
+            tickers=["AAPL"],
+            n_repeats=2,
+            n_resamples=200,
+        )
+        ceiling = analysis["parallelism_ceiling"]
+        assert ceiling["amdahl_bound_n2"] is not None
+        assert ceiling["amdahl_bound_n2"] >= 1.0
+
+    def test_speedup_exceeding_the_bound_is_flagged_not_absorbed(self):
+        """The old analysis multiplied past the bound instead of flagging it."""
+        analysis = run_h1(
+            # Huge distribution benefit that no parallel fraction could justify.
+            execute=make_executor(sentiment_s=500.0),
+            tickers=["AAPL"],
+            n_repeats=2,
+            n_resamples=200,
+        )
+        ceiling = analysis["parallelism_ceiling"]
+        assert ceiling["exceeds_bound"] is True
+        assert "not evidence of" in ceiling["interpretation"]
+
+    def test_dominant_stage_is_identified(self):
+        analysis = run_h1(
+            execute=make_executor(),
+            tickers=["AAPL"],
+            n_repeats=1,
+            n_resamples=200,
+        )
+        dominant = analysis["critical_path"]["dominant_stages"][0]
+        assert dominant["stage"] == "summarise"
+        assert dominant["parallelisable"] is False
+
+
+class TestHypothesisReporting:
+    def test_h1_can_fail(self):
+        """With a realistic workload the 30% target is not met, and that is reported."""
+        analysis = run_h1(
+            execute=make_executor(),
+            tickers=["AAPL", "MSFT"],
+            n_repeats=3,
+            n_resamples=200,
+        )
+        test = analysis["hypothesis_tests"][0]
+        assert test["hypothesis_id"] == "H1"
+        assert test["result"] == "FAIL"
+        assert test["sanity_warnings"] == []
+
+    def test_communication_is_not_inflated_by_compute(self):
+        analysis = run_h1(
+            execute=make_executor(),
+            tickers=["AAPL"],
+            n_repeats=1,
+            n_resamples=200,
+        )
+        dist = analysis["conditions"]["distributed_filter_warm"]
+        by_kind = dist["seconds_by_kind"]
+        assert by_kind["communication"]["median"] < by_kind["compute"]["median"]
+
+    def test_sample_size_is_interpreted(self):
+        analysis = run_h1(
+            execute=make_executor(),
+            tickers=["AAPL"],
+            n_repeats=2,
+            n_resamples=200,
+        )
+        interp = analysis["statistics"]["sample_size_interpretation"]
+        assert interp["evidence_level"] in ("anecdote", "indicative", "weak", "adequate")
