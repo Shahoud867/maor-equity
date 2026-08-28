@@ -274,30 +274,96 @@ than filled in.
 
 ---
 
-## Distributed mode (optional)
+## Distributed mode
 
-Everything above runs single-node. Two-node Ray is only needed for the
-cross-node communication measurement.
+This is now real, not a placeholder: `src/maor/pipeline/distributed.py`
+implements genuine Ray actors — CPU-bound stages (ingestion, chunking, chunk
+filtering, technical indicators) pinned to the head node, GPU-bound stages
+(sentiment, summarisation, guardrail) requesting a GPU fraction that only the
+worker node can satisfy. It has been exercised against local single-process Ray
+(real actors, real object store, real parallel dispatch — see
+`tests/test_distributed.py`), but not yet across two physical machines, which
+is what this section sets up.
 
-On the head node:
+Existing cluster scripts (`ray_cluster.ps1`, `ray_start_nodeA.ps1`,
+`ray_start_nodeB.ps1`) already bring up the Tailscale-tunnelled two-node Ray
+cluster this project was built around: Node A as a CPU-only head
+(`--num-cpus=2 --num-gpus=0`), Node B as a GPU worker (`--num-gpus=1
+--num-cpus=4`). Nothing here replaces that — this section is what to do once
+the cluster is up.
+
+### Start the cluster
+
+On Node A (head):
+
+```powershell
+.\ray_start_nodeA.ps1
+```
+
+On Node B (worker), once Node A's Tailscale IP is known:
+
+```powershell
+.\ray_start_nodeB.ps1
+```
+
+Verify both nodes are visible before running anything:
 
 ```bash
-ray start --head --port=6380
 python -m maor.cli verify-cluster --config configs/gpu_t1000.yaml
 ```
 
-On the worker:
+**Expected:** 2 alive nodes, one reporting `GPU=0` and one reporting `GPU=1`.
+If only one node shows up, distributed mode will still run — Ray will not
+error — but every actor lands on that one machine and the run is not actually
+distributed. `verify-cluster`'s output states the node count explicitly so this
+is never ambiguous after the fact.
+
+### Run distributed
 
 ```bash
-ray start --address='<HEAD_IP>:6380'
+python -m maor.cli h1-latency --config configs/gpu_t1000.yaml \
+    --set execution.mode=ray --tickers AAPL MSFT GOOGL --repeats 5 --ablation full
 ```
 
-Then re-run H1 with `--set execution.mode=ray --set execution.ray_address=auto`.
+`--ablation full` is what enables the distribution factor — `local` (the
+default) deliberately skips it. With `execution.mode=ray` and a real
+`Condition(distributed=True)`, `Pipeline` connects to the cluster via
+`ray.init(address="auto")`, which **fails rather than silently starting a local
+Ray instance** if no cluster is running — confirmed in
+`tests/test_distributed.py::TestPipelineRefusesFakeDistribution`. There is no
+path by which "distributed" quietly means "single machine" the way the
+original H1 did.
 
-**Note on scope.** Single-node results are valid for every claim except the
-cross-node transfer cost. If the cluster is troublesome, run single-node and
-report the communication measurement as not-yet-measured — that is a smaller
-loss than the audit's original problem, which was reporting it anyway.
+### What to check in the result
+
+`results/h1_latency.json`'s `distributed_filter_warm` condition now carries a
+`node_hosts` field naming which machine served each actor
+(`ingestion`/`sentiment`/`summariser`). Two different hostnames confirms the
+run was genuinely cross-machine; one hostname twice means both actors landed
+on the same node regardless of what the cluster reported, and the timing
+comparison against B1 should then be treated as informative about actor
+overhead only, not network cost.
+
+### Packaging note
+
+Ray worker processes are separate OS processes and do not inherit the driver's
+`PYTHONPATH`. `DistributedPipeline` passes `runtime_env={"py_modules": [...]}`
+to `ray.init()` specifically so `maor` is importable on Node B without a manual
+`pip install` step there — this was found and fixed during local testing (an
+actor construction failed with `ModuleNotFoundError: No module named 'maor'`
+even though the driving process could import it fine). If a future change adds
+a new top-level import inside an actor method, make sure it is inside
+`src/maor/` so it ships with the rest of the package; anything imported from
+outside that tree will not be shipped to Node B automatically.
+
+### Note on scope if the cluster is troublesome
+
+Single-node results (`--ablation local`) are valid for every H1 claim except
+the cross-node transfer cost. If the two-node cluster cannot be brought up in
+time, run single-node and report the distribution factor as not-yet-measured
+in `docs/RESULTS_STATUS.md` — that is a smaller loss than the original
+project's failure mode, which was reporting a distribution speedup that had
+never actually been measured.
 
 ---
 

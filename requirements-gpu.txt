@@ -13,6 +13,7 @@ accelerate>=0.30
 # BERTScore for H2. Optional: H2 runs without it and reports it as skipped.
 bert-score>=0.3.13
 
-# Distributed execution. Only needed for the cross-node communication
-# measurement; every other experiment runs single-node.
+# Distributed execution (src/maor/pipeline/distributed.py). Required for
+# --set execution.mode=ray / --ablation full on H1. Every other experiment,
+# and H1 with the default --ablation local, runs single-node without it.
 ray[default]>=2.9
