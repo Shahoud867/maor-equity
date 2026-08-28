@@ -81,18 +81,32 @@ class Pipeline:
         # Refuse rather than silently run single-node work under a "distributed"
         # label. A factor that does not change execution produces a contrast of
         # approximately zero, which reads as "distribution does not help" when in
-        # fact nothing distributed was ever run — a fabricated null result.
+        # fact nothing distributed was ever run — a fabricated null result. This
+        # is what happened to the original H1: Condition.distributed was never
+        # read by anything.
         if distributed and config.execution.mode != "ray":
             raise NotImplementedError(
-                "distributed=True requires execution.mode='ray', and the Ray "
-                "execution path is not implemented in this codebase. Running "
-                "single-node work under a 'distributed' label would produce a "
-                "contrast of ~0 that looks like a measured finding.\n"
-                "Either implement the Ray path, or run H1 with "
-                "--ablation local, which crosses the factors that are actually "
-                "implemented (chunk filter x warm start) and reports the "
-                "distribution factor as not measured."
+                "distributed=True requires execution.mode='ray'.\n"
+                "Either connect a Ray cluster and set execution.mode=ray "
+                "(see docs/GPU_RUNBOOK.md), or run H1 with --ablation local, "
+                "which crosses the factors that are implemented single-node "
+                "(chunk filter x warm start) and reports the distribution "
+                "factor as not measured."
             )
+
+        self._distributed: Any | None = None
+        if distributed:
+            # Delegate entirely to the Ray-backed implementation. The single-
+            # node model/router/filter setup below is skipped: distributed
+            # execution owns its own actors, placed by the cluster's actual
+            # topology (maor.pipeline.distributed.describe_cluster), not by
+            # this process's device string.
+            from .distributed import DistributedPipeline
+
+            self._distributed = DistributedPipeline(
+                config, ray_address=config.execution.ray_address
+            )
+            return
 
         self.router = DimensionRouter()
         self.chunk_filter = ChunkFilter(
@@ -182,6 +196,11 @@ class Pipeline:
         experiment runner can call it in ``finally`` without needing to know how
         far the run got.
         """
+        if self._distributed is not None:
+            info = self._distributed.close()
+            self._distributed = None
+            return {"release_verifications": [info]}
+
         verifications: list[Any] = []
         for attr in ("_sentiment", "_summariser"):
             model = getattr(self, attr, None)
@@ -223,6 +242,17 @@ class Pipeline:
         technical: dict[str, Any] | None = None,
         filing_type: str = "8-K",
     ) -> PipelineOutput:
+        if self._distributed is not None:
+            # Distributed execution computes its own technical indicators via
+            # the Node A actor; an externally supplied override is not
+            # currently threaded through, since H1 does not use one.
+            return self._distributed.run(
+                ticker=ticker,
+                document=document,
+                filing_type=filing_type,
+                filter_enabled=self.filter_enabled,
+            )
+
         rec = StageRecorder()
         warnings: list[str] = []
         technical = technical or {"rsi": 50.0, "macd_crossover_bullish": False}
