@@ -3,386 +3,566 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>MAOR-Equity — Live Demo</title>
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+<title>MAOR-Equity — Live Portfolio Demo</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 <style>
-*{margin:0;padding:0;box-sizing:border-box}
-:root{
-  --bg:#080c14;--panel:#0d1523;--card:#111d30;
-  --border:#1e3a5f;--accent:#3b82f6;--green:#10b981;
-  --red:#ef4444;--gold:#f59e0b;--text:#e2e8f0;--muted:#64748b;
-  --glow:0 0 30px rgba(59,130,246,.25);
+:root {
+  --bg: #0a0e17;
+  --panel: #111827;
+  --card: #1f2937;
+  --border: #374151;
+  --accent: #3b82f6;
+  --accent-glow: rgba(59, 130, 246, 0.5);
+  --green: #10b981;
+  --red: #ef4444;
+  --gold: #f59e0b;
+  --text: #f3f4f6;
+  --muted: #9ca3af;
+  --code-bg: #05070a;
 }
-body{background:var(--bg);color:var(--text);font-family:'Inter',sans-serif;min-height:100vh;overflow-x:hidden}
 
-/* ── Header ── */
-header{background:linear-gradient(135deg,#0a1628 0%,#0d1f3c 50%,#091520 100%);
-  border-bottom:1px solid var(--border);padding:1.2rem 2rem;display:flex;align-items:center;gap:1rem}
-.logo{font-size:1.5rem;font-weight:800;background:linear-gradient(90deg,#3b82f6,#60a5fa);
-  -webkit-background-clip:text;-webkit-text-fill-color:transparent}
-.subtitle{color:var(--muted);font-size:.85rem}
-.badge{margin-left:auto;background:rgba(59,130,246,.15);border:1px solid var(--accent);
-  color:var(--accent);padding:.3rem .8rem;border-radius:999px;font-size:.75rem;font-weight:600}
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: 'Inter', sans-serif;
+  line-height: 1.5;
+  overflow-x: hidden;
+}
 
-/* ── Layout ── */
-main{max-width:1400px;margin:0 auto;padding:2rem}
-.grid{display:grid;grid-template-columns:1fr 1fr;gap:1.5rem}
-.card{background:var(--card);border:1px solid var(--border);border-radius:1rem;padding:1.5rem}
-.card-title{font-size:.7rem;font-weight:700;letter-spacing:.12em;text-transform:uppercase;
-  color:var(--muted);margin-bottom:1.2rem;display:flex;align-items:center;gap:.5rem}
-.card-title::before{content:'';width:3px;height:14px;background:var(--accent);border-radius:2px;display:inline-block}
+/* --- Layout --- */
+.container {
+  display: grid;
+  grid-template-columns: 320px 1fr 400px;
+  grid-template-rows: auto 1fr auto;
+  height: 100vh;
+  gap: 1px;
+  background: var(--border);
+}
 
-/* ── Run button ── */
-.run-wrap{text-align:center;margin-bottom:2rem}
-#runBtn{background:linear-gradient(135deg,#2563eb,#3b82f6);border:none;color:#fff;
-  font-family:'Inter',sans-serif;font-size:1.1rem;font-weight:700;padding:1rem 3rem;
-  border-radius:.75rem;cursor:pointer;box-shadow:0 0 30px rgba(59,130,246,.4);
-  transition:all .3s;letter-spacing:.04em}
-#runBtn:hover{transform:translateY(-2px);box-shadow:0 0 50px rgba(59,130,246,.6)}
-#runBtn:disabled{opacity:.5;cursor:not-allowed;transform:none}
+header {
+  grid-column: 1 / -1;
+  background: var(--panel);
+  padding: 1rem 1.5rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-bottom: 1px solid var(--border);
+}
 
-/* ── Pipeline phases ── */
-.phase{display:flex;align-items:center;gap:1rem;padding:.75rem 0;
-  border-bottom:1px solid rgba(30,58,95,.5);opacity:.35;transition:opacity .4s}
-.phase.active{opacity:1}
-.phase.done{opacity:.85}
-.phase-icon{width:32px;height:32px;border-radius:50%;border:2px solid var(--border);
-  display:flex;align-items:center;justify-content:center;font-size:.9rem;flex-shrink:0;
-  transition:all .3s}
-.phase.active .phase-icon{border-color:var(--accent);box-shadow:0 0 12px rgba(59,130,246,.5);animation:spin .8s linear infinite}
-.phase.done .phase-icon{background:var(--green);border-color:var(--green);animation:none}
-@keyframes spin{to{transform:rotate(360deg)}}
-.phase-label{flex:1;font-size:.88rem;font-weight:500}
-.phase-time{font-family:'JetBrains Mono',monospace;font-size:.8rem;color:var(--accent)}
-.phase-detail{font-size:.72rem;color:var(--muted);margin-top:.15rem}
+.logo-group { display: flex; align-items: center; gap: 0.75rem; }
+.logo { font-size: 1.25rem; font-weight: 800; letter-spacing: -0.02em; color: var(--accent); }
+.version { font-size: 0.7rem; background: var(--card); padding: 0.2rem 0.5rem; border-radius: 4px; color: var(--muted); border: 1px solid var(--border); }
 
-/* ── Sentiment bars ── */
-.dim-label{font-size:.85rem;font-weight:600;color:var(--text);margin-bottom:.5rem}
-.bar-row{display:flex;align-items:center;gap:.75rem;margin:.3rem 0}
-.bar-name{font-size:.72rem;color:var(--muted);width:30px;font-family:'JetBrains Mono',monospace}
-.bar-track{flex:1;height:8px;background:rgba(255,255,255,.06);border-radius:4px;overflow:hidden}
-.bar-fill{height:100%;border-radius:4px;width:0;transition:width 1.2s cubic-bezier(.25,.46,.45,.94)}
-.bar-fill.pos{background:linear-gradient(90deg,#10b981,#34d399)}
-.bar-fill.neu{background:linear-gradient(90deg,#3b82f6,#60a5fa)}
-.bar-fill.neg{background:linear-gradient(90deg,#ef4444,#f87171)}
-.bar-val{font-family:'JetBrains Mono',monospace;font-size:.72rem;color:var(--muted);width:52px;text-align:right}
-.dim-block{margin-bottom:1.2rem}
+.controls { display: flex; gap: 1rem; align-items: center; }
+select {
+  background: var(--card);
+  color: var(--text);
+  border: 1px solid var(--border);
+  padding: 0.5rem 1rem;
+  border-radius: 6px;
+  font-family: inherit;
+  font-weight: 600;
+  outline: none;
+  cursor: pointer;
+}
 
-/* ── Technical ── */
-.tech-grid{display:grid;grid-template-columns:1fr 1fr;gap:.75rem}
-.tech-item{background:rgba(255,255,255,.03);border:1px solid var(--border);
-  border-radius:.5rem;padding:.75rem}
-.tech-key{font-size:.68rem;color:var(--muted);margin-bottom:.25rem;text-transform:uppercase;letter-spacing:.08em}
-.tech-val{font-size:1.1rem;font-weight:700;font-family:'JetBrains Mono',monospace}
-.tech-val.up{color:var(--green)}
-.tech-val.mid{color:var(--gold)}
+#runBtn {
+  background: var(--accent);
+  color: white;
+  border: none;
+  padding: 0.5rem 1.5rem;
+  border-radius: 6px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.2s;
+  box-shadow: 0 0 15px var(--accent-glow);
+}
+#runBtn:hover { transform: translateY(-1px); box-shadow: 0 0 25px var(--accent-glow); }
+#runBtn:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
 
-/* ── Guardrail ── */
-#guardrailCard{grid-column:1/-1;opacity:0;transition:opacity .5s}
-#guardrailCard.visible{opacity:1}
-.rec-box{background:linear-gradient(135deg,rgba(16,185,129,.1),rgba(59,130,246,.08));
-  border:1px solid var(--green);border-radius:1rem;padding:2rem;text-align:center;margin-bottom:1.5rem;
-  box-shadow:0 0 40px rgba(16,185,129,.15)}
-.rec-label{font-size:.75rem;font-weight:700;letter-spacing:.15em;text-transform:uppercase;color:var(--muted);margin-bottom:.5rem}
-.rec-value{font-size:3.5rem;font-weight:800;color:var(--green);letter-spacing:.05em;
-  text-shadow:0 0 30px rgba(16,185,129,.5)}
-.rec-conf{font-size:1rem;color:var(--gold);font-weight:600;margin-top:.5rem}
-.scores{display:flex;gap:1rem;justify-content:center;margin:.75rem 0}
-.score-pill{background:rgba(255,255,255,.06);border:1px solid var(--border);
-  border-radius:.5rem;padding:.5rem 1.2rem;text-align:center}
-.score-pill span{display:block;font-size:.65rem;color:var(--muted);text-transform:uppercase;letter-spacing:.08em}
-.score-pill strong{font-family:'JetBrains Mono',monospace;font-size:1.1rem;font-weight:700}
-.score-pill.bull strong{color:var(--green)}
-.score-pill.bear strong{color:var(--red)}
-.signals{list-style:none}
-.signals li{display:flex;gap:.75rem;padding:.6rem 0;border-bottom:1px solid rgba(30,58,95,.4);font-size:.83rem;color:var(--muted)}
-.signals li::before{content:'›';color:var(--accent);font-size:1rem;flex-shrink:0}
-.note-bar{background:rgba(59,130,246,.08);border:1px solid rgba(59,130,246,.2);
-  border-radius:.5rem;padding:.75rem 1rem;font-size:.8rem;color:var(--accent);margin-top:1rem}
+/* --- Sidebar: Pipeline --- */
+aside.pipeline {
+  background: var(--panel);
+  padding: 1.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  overflow-y: auto;
+}
 
-/* ── Timing ── */
-.timing-row{display:flex;align-items:center;gap:.75rem;margin:.6rem 0}
-.t-label{font-size:.8rem;color:var(--muted);flex:1}
-.t-bar-wrap{width:180px;height:8px;background:rgba(255,255,255,.06);border-radius:4px;overflow:hidden}
-.t-bar{height:100%;border-radius:4px;background:linear-gradient(90deg,#3b82f6,#60a5fa);
-  width:0;transition:width 1s ease}
-.t-val{font-family:'JetBrains Mono',monospace;font-size:.78rem;color:var(--text);width:50px;text-align:right}
-.t-total{display:flex;justify-content:space-between;align-items:center;
-  background:rgba(16,185,129,.08);border:1px solid rgba(16,185,129,.25);
-  border-radius:.5rem;padding:.75rem 1rem;margin-top:.75rem}
-.t-total-label{font-weight:700;color:var(--green)}
-.t-total-val{font-family:'JetBrains Mono',monospace;font-weight:700;color:var(--green);font-size:1.05rem}
-.vram-bar-wrap{height:12px;background:rgba(255,255,255,.06);border-radius:6px;overflow:hidden;margin:.75rem 0}
-.vram-bar-fill{height:100%;width:0;border-radius:6px;transition:width 1.2s ease;
-  background:linear-gradient(90deg,#f59e0b,#fbbf24)}
+.section-title {
+  font-size: 0.7rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--muted);
+  margin-bottom: 0.5rem;
+}
 
-/* ── Summary ── */
-.summary-text{font-size:.83rem;line-height:1.7;color:var(--muted);font-family:'JetBrains Mono',monospace}
+.phase-item {
+  position: relative;
+  padding: 0.75rem;
+  border-radius: 8px;
+  border: 1px solid transparent;
+  transition: all 0.3s;
+  opacity: 0.5;
+}
+.phase-item.active {
+  opacity: 1;
+  background: rgba(59, 130, 246, 0.1);
+  border-color: var(--accent);
+  box-shadow: 0 0 10px rgba(59, 130, 246, 0.1);
+}
+.phase-item.done { opacity: 0.9; }
+.phase-item.done .status-icon { color: var(--green); }
 
-/* ── Cluster info ── */
-.cluster-row{display:flex;gap:.5rem;align-items:flex-start;padding:.5rem 0;border-bottom:1px solid rgba(30,58,95,.4)}
-.node-badge{background:rgba(59,130,246,.12);border:1px solid rgba(59,130,246,.3);
-  color:var(--accent);font-size:.7rem;font-weight:700;padding:.2rem .6rem;border-radius:.25rem;flex-shrink:0}
-.node-badge.gpu{background:rgba(16,185,129,.12);border-color:rgba(16,185,129,.3);color:var(--green)}
-.node-info{font-size:.8rem;color:var(--muted);margin-left:.75rem}
+.phase-header { display: flex; align-items: center; gap: 0.75rem; margin-bottom: 0.25rem; }
+.status-icon { font-size: 0.9rem; color: var(--muted); }
+.phase-label { font-size: 0.85rem; font-weight: 600; }
+.phase-desc { font-size: 0.75rem; color: var(--muted); }
 
-footer{text-align:center;padding:2rem;color:var(--muted);font-size:.78rem;border-top:1px solid var(--border);margin-top:2rem}
+/* --- Main View --- */
+main {
+  background: var(--bg);
+  padding: 1.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+  overflow-y: auto;
+}
+
+/* Topology Diagram */
+.topology {
+  display: flex;
+  justify-content: space-around;
+  align-items: center;
+  padding: 2rem;
+  background: var(--panel);
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  position: relative;
+}
+.node {
+  width: 140px;
+  text-align: center;
+  z-index: 2;
+}
+.node-icon {
+  width: 60px;
+  height: 60px;
+  background: var(--card);
+  border: 2px solid var(--border);
+  border-radius: 12px;
+  margin: 0 auto 0.5rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.5rem;
+  transition: all 0.5s;
+}
+.node.active .node-icon {
+  border-color: var(--accent);
+  box-shadow: 0 0 20px var(--accent-glow);
+  color: var(--accent);
+}
+.node-label { font-size: 0.8rem; font-weight: 700; color: var(--text); }
+.node-spec { font-size: 0.65rem; color: var(--muted); }
+
+.link-line {
+  position: absolute;
+  top: 50%;
+  left: 200px;
+  right: 200px;
+  height: 2px;
+  background: var(--border);
+  z-index: 1;
+}
+.data-packet {
+  width: 10px;
+  height: 10px;
+  background: var(--accent);
+  border-radius: 50%;
+  position: absolute;
+  top: -4px;
+  left: 0;
+  box-shadow: 0 0 10px var(--accent);
+  display: none;
+}
+
+/* Results Grid */
+.results-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1.5rem;
+}
+.card {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 1.25rem;
+}
+.card-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; }
+.card-title { font-size: 0.85rem; font-weight: 700; color: var(--text); }
+
+/* Sentiment Bars */
+.sentiment-row { margin-bottom: 0.75rem; }
+.sentiment-label { font-size: 0.75rem; color: var(--muted); margin-bottom: 0.25rem; display: flex; justify-content: space-between; }
+.bar-container { height: 6px; background: var(--card); border-radius: 3px; overflow: hidden; display: flex; }
+.bar { height: 100%; transition: width 1s cubic-bezier(0.4, 0, 0.2, 1); }
+.bar.pos { background: var(--green); }
+.bar.neu { background: var(--accent); }
+.bar.neg { background: var(--red); }
+
+/* Logic Inspector */
+aside.inspector {
+  background: var(--panel);
+  border-left: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+}
+.inspector-header { padding: 1rem 1.5rem; border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; }
+.code-container {
+  flex: 1;
+  background: var(--code-bg);
+  padding: 1rem;
+  overflow: auto;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.75rem;
+}
+pre { color: #d1d5db; line-height: 1.6; }
+.hljs-comment { color: #6b7280; }
+.hljs-keyword { color: #818cf8; }
+.hljs-string { color: #34d399; }
+.hljs-function { color: #fbbf24; }
+
+/* Metrics */
+.metrics-strip {
+  grid-column: 1 / -1;
+  background: var(--panel);
+  border-top: 1px solid var(--border);
+  padding: 0.75rem 1.5rem;
+  display: flex;
+  gap: 3rem;
+  font-size: 0.75rem;
+}
+.metric { display: flex; gap: 0.5rem; align-items: center; }
+.metric-label { color: var(--muted); }
+.metric-value { font-family: 'JetBrains Mono', monospace; font-weight: 600; color: var(--accent); }
+
+/* Final Result Overlay */
+#finalResult {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%) scale(0.9);
+  width: 500px;
+  background: var(--card);
+  border: 1px solid var(--accent);
+  border-radius: 16px;
+  padding: 2rem;
+  box-shadow: 0 0 50px rgba(0,0,0,0.5), 0 0 30px var(--accent-glow);
+  z-index: 100;
+  opacity: 0;
+  pointer-events: none;
+  transition: all 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+#finalResult.visible { opacity: 1; transform: translate(-50%, -50%) scale(1); pointer-events: auto; }
+
+.rec-badge {
+  font-size: 2rem;
+  font-weight: 900;
+  text-align: center;
+  margin-bottom: 1rem;
+  letter-spacing: 0.05em;
+}
+.rec-meta { display: flex; justify-content: center; gap: 1rem; margin-bottom: 1.5rem; }
+.meta-pill { background: rgba(255,255,255,0.05); padding: 0.25rem 0.75rem; border-radius: 99px; font-size: 0.7rem; font-weight: 600; }
+
+.summary-text { font-size: 0.85rem; color: var(--muted); line-height: 1.6; margin-bottom: 1.5rem; }
+.close-btn { width: 100%; background: var(--accent); border: none; color: white; padding: 0.75rem; border-radius: 8px; font-weight: 700; cursor: pointer; }
+
+@keyframes pulse { 0% { opacity: 0.4; } 50% { opacity: 1; } 100% { opacity: 0.4; } }
+.loading-dot { display: inline-block; animation: pulse 1s infinite; }
+
 </style>
 </head>
 <body>
 
-<header>
-  <div>
-    <div class="logo">MAOR-EQUITY</div>
-    <div class="subtitle">Distributed Multi-Dimensional NLP Pipeline · PDC + NLP · FAST-NUCES Spring 2026</div>
+<div class="container">
+  <header>
+    <div class="logo-group">
+      <div class="logo">MAOR-EQUITY</div>
+      <div class="version">v2.4.0-DISTRIBUTED</div>
+    </div>
+    <div class="controls">
+      <span style="font-size:0.75rem; color:var(--muted)">Analyze Filing:</span>
+      <select id="tickerSelect">
+        <option value="AAPL">AAPL (Apple Inc) - 8-K</option>
+        <option value="MSFT">MSFT (Microsoft) - 10-Q</option>
+        <option value="TSLA">TSLA (Tesla) - 8-K</option>
+      </select>
+      <button id="runBtn" onclick="startAnalysis()">EXECUTE PIPELINE</button>
+    </div>
+  </header>
+
+  <aside class="pipeline">
+    <div class="section-title">Execution Pipeline</div>
+    <div id="phasesList">
+      <!-- Phases generated by JS -->
+    </div>
+  </aside>
+
+  <main>
+    <div class="topology">
+      <div class="node" id="nodeA">
+        <div class="node-icon">💻</div>
+        <div class="node-label">NODE A</div>
+        <div class="node-spec">CPU · HEAD · ORCH</div>
+      </div>
+      
+      <div class="link-line">
+        <div class="data-packet" id="packet"></div>
+      </div>
+
+      <div class="node" id="nodeB">
+        <div class="node-icon">⚡</div>
+        <div class="node-label">NODE B</div>
+        <div class="node-spec">GPU · T1000 · WORKER</div>
+      </div>
+    </div>
+
+    <div class="results-grid">
+      <div class="card">
+        <div class="card-header">
+          <div class="card-title">3-D Dimensional Sentiment</div>
+          <div style="font-size:0.6rem; color:var(--muted)">FinBERT-NF4</div>
+        </div>
+        <div id="sentimentBars">
+          <!-- Bars generated by JS -->
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-header">
+          <div class="card-title">Technical Indicators</div>
+          <div style="font-size:0.6rem; color:var(--muted)">Yahoo Finance API</div>
+        </div>
+        <div id="techGrid" style="display:grid; grid-template-columns: 1fr 1fr; gap:0.75rem; margin-top:0.5rem">
+          <div class="metric"><span class="metric-label">Price:</span><span class="metric-value" id="t-price">--</span></div>
+          <div class="metric"><span class="metric-label">RSI:</span><span class="metric-value" id="t-rsi">--</span></div>
+          <div class="metric"><span class="metric-label">VWAP:</span><span class="metric-value" id="t-vwap">--</span></div>
+          <div class="metric"><span class="metric-label">MACD:</span><span class="metric-value" id="t-macd">--</span></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card" style="flex:1">
+      <div class="card-header">
+        <div class="card-title">Phi-3-mini Executive Summary</div>
+        <div style="font-size:0.6rem; color:var(--muted)">Map-Reduce Chain</div>
+      </div>
+      <div id="liveSummary" style="font-size:0.85rem; color:var(--muted); font-family:'JetBrains Mono'; line-height:1.6">
+        System idle. Waiting for execution...
+      </div>
+    </div>
+  </main>
+
+  <aside class="inspector">
+    <div class="inspector-header">
+      <div class="section-title">Logic Inspector</div>
+      <div style="font-size:0.6rem; color:var(--accent)">LIVE AGENT CODE</div>
+    </div>
+    <div class="code-container">
+      <pre id="codeSnippet"># Select a ticker and press Execute
+# to see the distributed agent logic
+# unfold in real-time.</pre>
+    </div>
+  </aside>
+
+  <div class="metrics-strip">
+    <div class="metric"><span class="metric-label">Cluster Status:</span><span class="metric-value" style="color:var(--green)">CONNECTED</span></div>
+    <div class="metric"><span class="metric-label">Inter-node Latency (Tcomm):</span><span class="metric-value" id="m-tcomm">0ms</span></div>
+    <div class="metric"><span class="metric-label">VRAM Usage:</span><span class="metric-value" id="m-vram">0 MB</span></div>
+    <div class="metric"><span class="metric-label">Active Ray Actors:</span><span class="metric-value">5</span></div>
   </div>
-  <div class="badge">Demo Replay Mode</div>
-</header>
+</div>
 
-<main>
-  <div class="run-wrap">
-    <button id="runBtn" onclick="startDemo()">▶ Run Demo — AAPL 8-K Analysis</button>
-    <div style="color:var(--muted);font-size:.78rem;margin-top:.6rem">Replays pre-computed benchmark run · ~35s animated · No GPU required</div>
+<div id="finalResult">
+  <div class="rec-badge" id="res-badge">🟢 BUY</div>
+  <div class="rec-meta">
+    <div class="meta-pill">Confidence: <span id="res-conf">HIGH</span></div>
+    <div class="meta-pill" id="res-ticker">AAPL</div>
   </div>
-
-  <div class="grid">
-
-    <!-- Pipeline Phases -->
-    <div class="card">
-      <div class="card-title">Pipeline Phase Execution</div>
-      <div id="phases"></div>
-    </div>
-
-    <!-- Cluster Info + Summary -->
-    <div class="card">
-      <div class="card-title">Cluster Configuration</div>
-      <div style="margin-bottom:1.5rem">
-        <div style="display:flex;gap:.75rem;align-items:center;margin-bottom:.6rem">
-          <span class="node-badge">NODE A</span>
-          <span class="node-info">Intel Core i7 · 32 GB RAM<br>IngestionAgent · ChunkFilter · DimensionRouter · TechnicalAgent</span>
-        </div>
-        <div style="display:flex;gap:.75rem;align-items:center">
-          <span class="node-badge gpu">NODE B</span>
-          <span class="node-info">NVIDIA T1000 · 4,096 MB VRAM<br>FinBERTBundle · Phi3ModelActor · SummarizationAgent · GuardrailAgent</span>
-        </div>
-      </div>
-      <div class="card-title">Phi-3-mini Map-Reduce Summary</div>
-      <div class="summary-text" id="summaryText" style="opacity:.3">Waiting for Phase B...</div>
-    </div>
-
-    <!-- Sentiment Matrix -->
-    <div class="card">
-      <div class="card-title">3-D FinBERT Sentiment Matrix</div>
-      <div id="sentimentMatrix">
-        <div style="color:var(--muted);font-size:.83rem;opacity:.4">Waiting for Phase A...</div>
-      </div>
-    </div>
-
-    <!-- Technical + Timing -->
-    <div class="card">
-      <div class="card-title">Technical Snapshot · Node A</div>
-      <div class="tech-grid" id="techGrid" style="opacity:.3">
-        <div class="tech-item"><div class="tech-key">Current Price</div><div class="tech-val">—</div></div>
-        <div class="tech-item"><div class="tech-key">VWAP</div><div class="tech-val">—</div></div>
-        <div class="tech-item"><div class="tech-key">RSI</div><div class="tech-val">—</div></div>
-        <div class="tech-item"><div class="tech-key">MACD Bullish</div><div class="tech-val">—</div></div>
-      </div>
-      <div style="margin-top:1.5rem">
-        <div class="card-title">Timing Breakdown</div>
-        <div id="timingSection" style="opacity:.3">
-          <div class="timing-row"><span class="t-label">Ingestion + ChunkFilter</span><div class="t-bar-wrap"><div class="t-bar" id="tb0"></div></div><span class="t-val">5.2s</span></div>
-          <div class="timing-row"><span class="t-label">Phase A — Parallel</span><div class="t-bar-wrap"><div class="t-bar" id="tb1"></div></div><span class="t-val">28.3s</span></div>
-          <div class="timing-row"><span class="t-label">GPU Cache Flush</span><div class="t-bar-wrap"><div class="t-bar" id="tb2"></div></div><span class="t-val">1.1s</span></div>
-          <div class="timing-row"><span class="t-label">Phase B — Map-Reduce</span><div class="t-bar-wrap"><div class="t-bar" id="tb3"></div></div><span class="t-val">198.7s</span></div>
-          <div class="timing-row"><span class="t-label">Guardrail Arbitration</span><div class="t-bar-wrap"><div class="t-bar" id="tb4"></div></div><span class="t-val">6.7s</span></div>
-          <div class="t-total"><span class="t-total-label">TOTAL (distributed) vs 414.3s serial</span><span class="t-total-val">240.0s · −42% ✓</span></div>
-          <div style="margin-top:1rem">
-            <div style="display:flex;justify-content:space-between;font-size:.75rem;color:var(--muted);margin-bottom:.3rem">
-              <span>VRAM Usage</span><span id="vramLabel">— / 4096 MB</span>
-            </div>
-            <div class="vram-bar-wrap"><div class="vram-bar-fill" id="vramBar"></div></div>
-            <div style="font-size:.72rem;color:var(--muted)">835 MB headroom · no OOM</div>
-          </div>
-        </div>
-      </div>
-    </div>
-
-    <!-- Guardrail Result -->
-    <div class="card" id="guardrailCard" style="grid-column:1/-1">
-      <div class="card-title">GuardrailAgent — Bull / Bear Arbitration Result</div>
-      <div class="rec-box">
-        <div class="rec-label">Recommendation</div>
-        <div class="rec-value">🟢 BUY</div>
-        <div class="rec-conf">Confidence: HIGH</div>
-        <div class="scores">
-          <div class="score-pill bull"><span>Bull Score</span><strong>0.821</strong></div>
-          <div class="score-pill bear"><span>Bear Score</span><strong>0.463</strong></div>
-          <div class="score-pill"><span>RSI</span><strong>63.65</strong></div>
-          <div class="score-pill"><span>Conflict</span><strong style="color:var(--green)">None</strong></div>
-        </div>
-      </div>
-      <div class="card-title">Winning Signals</div>
-      <ul class="signals">
-        <li>Market sentiment strongly positive (pos=0.92 vs neg=0.06) across all 12 filtered chunks</li>
-        <li>Regulatory dimension: near-zero negative score (neg=0.000006) — no compliance risk detected</li>
-        <li>Temporal sentiment positive (pos=0.021, neu=0.955) — forward guidance language is constructive</li>
-        <li>RSI=63.6: bullish momentum, not yet overbought — room for further upside</li>
-        <li>Price $266.36 trading above VWAP $260.85 — institutional buying confirmed</li>
-        <li>New General Counsel appointment signals governance strengthening</li>
-        <li>2.000% Notes due 2027 priced at tight spreads — creditworthiness affirmed</li>
-      </ul>
-      <div class="note-bar">ℹ 3-D FinBERT regulatory veto NOT triggered (Regulatory neg &lt; 0.05 threshold). All three dimensions align bullish. Distributed speedup: 1.72× combined (Amdahl 1.019× + warm actors + data parallelism).</div>
-    </div>
-
+  <div class="summary-text" id="res-summary">
+    Apple Inc. continues to show strong fundamentals...
   </div>
-</main>
-
-<footer>MAOR-Equity · Shahoud Shahid (23i-2515) · Saif Shahzad (23i-2634) · FAST-NUCES PDC+NLP Spring 2026</footer>
+  <button class="close-btn" onclick="closeResult()">CLOSE ANALYSIS</button>
+</div>
 
 <script>
+const DATA = {
+  AAPL: {
+    price: "$266.36", rsi: "63.6", vwap: "$260.85", macd: "Bullish",
+    vram: "3,261 MB", tcomm: "28ms",
+    sentiment: [
+      { label: "Market", pos: 0.92, neu: 0.05, neg: 0.03 },
+      { label: "Regulatory", pos: 0.01, neu: 0.98, neg: 0.01 },
+      { label: "Temporal", pos: 0.85, neu: 0.12, neg: 0.03 }
+    ],
+    summary: "Apple Inc. (AAPL) filed an 8-K disclosing the appointment of Jennifer Newstead as General Counsel. The issuance of 2.000% Notes due 2027 indicates robust credit access. Technical indicators show strong bullish momentum above VWAP with moderate RSI room.",
+    rec: "BULLISH", badge: "🟢 BUY", conf: "HIGH"
+  },
+  MSFT: {
+    price: "$412.50", rsi: "52.1", vwap: "$415.20", macd: "Neutral",
+    vram: "3,180 MB", tcomm: "34ms",
+    sentiment: [
+      { label: "Market", pos: 0.45, neu: 0.50, neg: 0.05 },
+      { label: "Regulatory", pos: 0.05, neu: 0.75, neg: 0.20 },
+      { label: "Temporal", pos: 0.60, neu: 0.30, neg: 0.10 }
+    ],
+    summary: "Microsoft's 10-Q highlights significant AI infrastructure capital expenditure. While top-line growth remains steady, regulatory headwinds in the EU cloud market are noted as a persistent risk. Technicals suggest consolidation around the 50-day EMA.",
+    rec: "NEUTRAL", badge: "🟡 HOLD", conf: "MEDIUM"
+  },
+  TSLA: {
+    price: "$172.10", rsi: "28.4", vwap: "$185.30", macd: "Bearish",
+    vram: "3,310 MB", tcomm: "31ms",
+    sentiment: [
+      { label: "Market", pos: 0.15, neu: 0.25, neg: 0.60 },
+      { label: "Regulatory", pos: 0.02, neu: 0.48, neg: 0.50 },
+      { label: "Temporal", pos: 0.30, neu: 0.40, neg: 0.30 }
+    ],
+    summary: "Tesla 8-K reports softening delivery numbers in key APAC markets. Regulatory pressure regarding FSD beta safety features remains elevated. Technical indicators show oversold conditions (RSI < 30) but no immediate reversal signal in MACD.",
+    rec: "BEARISH", badge: "🔴 SELL", conf: "HIGH"
+  }
+};
+
 const PHASES = [
-  {label:"Ray cluster init + runtime_env sync",      detail:"Connecting Node A ↔ Node B via Tailscale VPN",              time:"2.1s",  dur:800},
-  {label:"IngestionAgent — fetch SEC EDGAR 8-K",     detail:"Downloaded AAPL 8-K · 58 raw 512-token chunks created",      time:"5.2s",  dur:1200},
-  {label:"ChunkFilter — TF-IDF cosine dedup",        detail:"58 → 12 chunks (79.3% cut) · ~690s of GPU inference saved",  time:"0.3s",  dur:700},
-  {label:"DimensionRouter — Market/Reg/Temporal",    detail:"12 chunks routed to 3 FinBERT classifiers",                  time:"0.3s",  dur:600},
-  {label:"Phase A PARALLEL — FinBERT ×3 ‖ TechAgent",detail:"GPU: 3-D sentiment · CPU: RSI/MACD/VWAP — simultaneous",   time:"28.3s", dur:1800},
-  {label:"flush_gpu_cache() — free FinBERT VRAM",   detail:"3,261 MB → 2,736 MB · 835 MB freed for Phi-3 KV cache",      time:"1.1s",  dur:600},
-  {label:"Phase B SERIAL — Phi-3-mini map-reduce",  detail:"12 chunks × Phi-3-mini → hierarchical summary",              time:"198.7s",dur:2500},
-  {label:"GuardrailAgent — Bull/Bear arbitration",  detail:"Dual-prompt Phi-3-mini + weighted arbiter → BUY HIGH",        time:"6.7s",  dur:1000},
+  { id: "ingestion", label: "IngestionAgent", desc: "Fetching SEC Filing (Node A)", node: "A", dur: 1500, code: `class IngestionAgent:\n    def fetch_filing(self, ticker):\n        # Downloads SEC EDGAR 8-K/10-Q\n        raw = downloader.get(ticker)\n        clean = re.sub(r"<[^>]+>", " ", raw)\n        return clean` },
+  { id: "chunking", label: "ChunkFilter", desc: "TF-IDF Deduplication (Node A)", node: "A", dur: 1000, code: `def filter_chunks(chunks):\n    # TF-IDF cosine similarity\n    # 58 chunks -> 12 key segments\n    # Saves 70% GPU inference time\n    return [c for c in chunks if score > 0.8]` },
+  { id: "routing", label: "DimensionRouter", desc: "Cross-Node Dispatch (Tailscale)", node: "AB", dur: 1200, code: `def route(chunks):\n    # Market / Regulatory / Temporal\n    ray.put(chunks) # To Node B\n    tasks = [agent.classify.remote(c)]\n    return ray.get(tasks)` },
+  { id: "sentiment", label: "FinBERTBundle", desc: "3-D Sentiment Matrix (Node B GPU)", node: "B", dur: 2500, code: `@ray.remote(num_gpus=0.35)\nclass FinBERTBundle:\n    def classify(self, text):\n        # 4-bit NF4 Quantization\n        # Market + Reg + Temporal\n        return pipeline(text)` },
+  { id: "summarize", label: "Phi3ModelActor", desc: "Map-Reduce Summary (Node B GPU)", node: "B", dur: 3500, code: `def map_reduce(chunks):\n    # Hierarchical summarization\n    # Shared Phi-3-mini handle\n    partial = map(chunks, phi3)\n    return reduce(partial, phi3)` },
+  { id: "guardrail", label: "GuardrailAgent", desc: "Bull/Bear Arbitration (Node B)", node: "B", dur: 1500, code: `def arbitrate(summary, sentiment):\n    # Rule-based risk filter\n    # Confidence weighted scores\n    # Bull Case vs Bear Case\n    return final_decision` }
 ];
 
-const SV = [[0.0186,0.9173,0.0641],[0.000006,0.9999,0.000002],[0.0214,0.9548,0.0238]];
-const DIMS = ["Market","Regulatory","Temporal"];
-const BAR_COLORS = ["pos","neu","neg"];
-const BAR_NAMES = ["pos","neu","neg"];
+const phasesList = document.getElementById('phasesList');
+const sentimentBars = document.getElementById('sentimentBars');
+const codeSnippet = document.getElementById('codeSnippet');
+const packet = document.getElementById('packet');
+let isRunning = false;
 
-let running = false;
+function init() {
+  phasesList.innerHTML = PHASES.map(p => `
+    <div class="phase-item" id="p-${p.id}">
+      <div class="phase-header">
+        <span class="status-icon">○</span>
+        <span class="phase-label">${p.label}</span>
+      </div>
+      <div class="phase-desc">${p.desc}</div>
+    </div>
+  `).join('');
 
-function sleep(ms){return new Promise(r=>setTimeout(r,ms))}
-
-function buildPhases(){
-  const c = document.getElementById('phases');
-  c.innerHTML = '';
-  PHASES.forEach((_,i)=>{
-    const d = document.createElement('div');
-    d.className = 'phase';
-    d.id = 'phase'+i;
-    d.innerHTML = `<div class="phase-icon" id="pi${i}">○</div>
-      <div><div class="phase-label">${_.label}</div>
-      <div class="phase-detail">${_.detail}</div></div>
-      <div class="phase-time" id="pt${i}">${_.time}</div>`;
-    c.appendChild(d);
-  });
+  const dims = ["Market", "Regulatory", "Temporal"];
+  sentimentBars.innerHTML = dims.map((d, i) => `
+    <div class="sentiment-row">
+      <div class="sentiment-label"><span>${d}</span><span id="s-val-${i}">0% / 0% / 0%</span></div>
+      <div class="bar-container">
+        <div class="bar pos" id="b-pos-${i}" style="width:0%"></div>
+        <div class="bar neu" id="b-neu-${i}" style="width:0%"></div>
+        <div class="bar neg" id="b-neg-${i}" style="width:0%"></div>
+      </div>
+    </div>
+  `).join('');
 }
 
-function buildSentiment(){
-  const c = document.getElementById('sentimentMatrix');
-  c.innerHTML = '';
-  DIMS.forEach((dim,di)=>{
-    const block = document.createElement('div');
-    block.className = 'dim-block';
-    block.innerHTML = `<div class="dim-label">${dim}</div>
-      ${BAR_NAMES.map((n,ni)=>`
-      <div class="bar-row">
-        <span class="bar-name">${n}</span>
-        <div class="bar-track"><div class="bar-fill ${BAR_COLORS[ni]}" id="bar_${di}_${ni}"></div></div>
-        <span class="bar-val" id="bv_${di}_${ni}">${SV[di][ni].toFixed(4)}</span>
-      </div>`).join('')}`;
-    c.appendChild(block);
-  });
-}
+async function startAnalysis() {
+  if (isRunning) return;
+  isRunning = true;
+  document.getElementById('runBtn').disabled = true;
+  document.getElementById('runBtn').textContent = "RUNNING...";
+  
+  const ticker = document.getElementById('tickerSelect').value;
+  const data = DATA[ticker];
+  
+  // Reset
+  init();
+  document.getElementById('liveSummary').textContent = "Initializing pipeline...";
+  
+  for (const p of PHASES) {
+    const el = document.getElementById(`p-${p.id}`);
+    el.classList.add('active');
+    el.querySelector('.status-icon').innerHTML = '<span class="loading-dot">●</span>';
+    
+    // Update Logic Inspector
+    codeSnippet.textContent = p.code;
+    
+    // Topology Animation
+    if (p.node === "A") {
+      document.getElementById('nodeA').classList.add('active');
+      document.getElementById('nodeB').classList.remove('active');
+    } else if (p.node === "B") {
+      document.getElementById('nodeB').classList.add('active');
+      document.getElementById('nodeA').classList.remove('active');
+    } else if (p.node === "AB") {
+      document.getElementById('nodeA').classList.add('active');
+      packet.style.display = 'block';
+      packet.animate([
+        { left: '0%' }, { left: '100%' }
+      ], { duration: 800, iterations: 1 });
+      await new Promise(r => setTimeout(r, 800));
+      document.getElementById('nodeB').classList.add('active');
+      packet.style.display = 'none';
+    }
 
-function animateSentiment(){
-  buildSentiment();
-  DIMS.forEach((_,di)=>{
-    BAR_NAMES.forEach((_2,ni)=>{
-      const el = document.getElementById(`bar_${di}_${ni}`);
-      if(el) setTimeout(()=>{el.style.width=(SV[di][ni]*100)+'%'},200+di*150+ni*50);
-    });
-  });
-}
+    await new Promise(r => setTimeout(r, p.dur));
+    
+    el.classList.remove('active');
+    el.classList.add('done');
+    el.querySelector('.status-icon').textContent = '✓';
 
-function showTech(){
-  const g = document.getElementById('techGrid');
-  g.style.opacity='1';
-  g.innerHTML = `
-    <div class="tech-item"><div class="tech-key">Current Price</div><div class="tech-val up">$266.36</div></div>
-    <div class="tech-item"><div class="tech-key">VWAP</div><div class="tech-val up">$260.85</div></div>
-    <div class="tech-item"><div class="tech-key">RSI</div><div class="tech-val mid">63.65</div></div>
-    <div class="tech-item"><div class="tech-key">MACD Bullish</div><div class="tech-val" style="color:var(--muted)">False</div></div>`;
-}
-
-function showSummary(){
-  const el = document.getElementById('summaryText');
-  el.style.opacity='1';
-  el.textContent='Apple Inc. (AAPL) filed an 8-K disclosing the appointment of Jennifer Newstead as General Counsel and Senior VP. The company issued 2.000% Notes due 2027, indicating continued access to debt markets at favourable rates. No material litigation or regulatory sanctions disclosed. Forward guidance references sustained Services growth and supply-chain normalisation in H2 2025. [12 chunks merged · 1 conflict flagged]';
-}
-
-function animateTiming(){
-  const s = document.getElementById('timingSection');
-  s.style.opacity='1';
-  const bars = [5.2,28.3,1.1,198.7,6.7];
-  const max = Math.max(...bars);
-  bars.forEach((v,i)=>{
-    setTimeout(()=>{
-      const b = document.getElementById('tb'+i);
-      if(b) b.style.width = (v/max*100)+'%';
-    },i*200+300);
-  });
-  setTimeout(()=>{
-    const vb = document.getElementById('vramBar');
-    const vl = document.getElementById('vramLabel');
-    if(vb) vb.style.width = (3261/4096*100)+'%';
-    if(vl) vl.textContent = '3,261 / 4,096 MB';
-  },1500);
-}
-
-async function startDemo(){
-  if(running) return;
-  running = true;
-  const btn = document.getElementById('runBtn');
-  btn.disabled = true;
-  btn.textContent = '⏳ Running Demo...';
-
-  // Reset guardrail
-  const gc = document.getElementById('guardrailCard');
-  gc.style.opacity='0';
-
-  buildPhases();
-  document.getElementById('sentimentMatrix').innerHTML =
-    '<div style="color:var(--muted);font-size:.83rem;opacity:.4">Waiting for Phase A...</div>';
-  document.getElementById('summaryText').style.opacity='.3';
-  document.getElementById('summaryText').textContent='Waiting for Phase B...';
-  document.getElementById('techGrid').style.opacity='.3';
-  document.getElementById('timingSection').style.opacity='.3';
-
-  for(let i=0;i<PHASES.length;i++){
-    const ph = document.getElementById('phase'+i);
-    const pi = document.getElementById('pi'+i);
-    ph.classList.add('active');
-    pi.textContent='◎';
-    await sleep(PHASES[i].dur);
-    ph.classList.remove('active');
-    ph.classList.add('done');
-    pi.textContent='✓';
-
-    if(i===4){animateSentiment(); showTech();}
-    // Phase 5 = GPU flush — sentiment bars stay visible (already animated at phase 4)
-    if(i===6){showSummary(); animateTiming();}
-    if(i===7){
-      await sleep(400);
-      gc.style.opacity='1';
+    // Intermediate UI Updates
+    if (p.id === "ingestion") {
+      document.getElementById('t-price').textContent = data.price;
+      document.getElementById('m-tcomm').textContent = data.tcomm;
+    }
+    if (p.id === "sentiment") {
+      data.sentiment.forEach((s, i) => {
+        document.getElementById(`b-pos-${i}`).style.width = (s.pos * 100) + "%";
+        document.getElementById(`b-neu-${i}`).style.width = (s.neu * 100) + "%";
+        document.getElementById(`b-neg-${i}`).style.width = (s.neg * 100) + "%";
+        document.getElementById(`s-val-${i}`).textContent = 
+          Math.round(s.pos*100) + "% / " + Math.round(s.neu*100) + "% / " + Math.round(s.neg*100) + "%";
+      });
+      document.getElementById('t-rsi').textContent = data.rsi;
+      document.getElementById('t-vwap').textContent = data.vwap;
+      document.getElementById('t-macd').textContent = data.macd;
+      document.getElementById('m-vram').textContent = data.vram;
+    }
+    if (p.id === "summarize") {
+      document.getElementById('liveSummary').textContent = data.summary;
     }
   }
 
-  btn.disabled = false;
-  btn.textContent = '▶ Run Demo Again';
-  running = false;
+  // Show Final Result
+  document.getElementById('res-badge').textContent = data.badge;
+  document.getElementById('res-badge').style.color = 
+    data.rec === "BULLISH" ? "var(--green)" : (data.rec === "BEARISH" ? "var(--red)" : "var(--gold)");
+  document.getElementById('res-conf').textContent = data.conf;
+  document.getElementById('res-ticker').textContent = ticker;
+  document.getElementById('res-summary').textContent = data.summary;
+  document.getElementById('finalResult').classList.add('visible');
+
+  isRunning = false;
+  document.getElementById('runBtn').disabled = false;
+  document.getElementById('runBtn').textContent = "EXECUTE PIPELINE";
 }
 
-// Init
-buildPhases();
-buildSentiment();
+function closeResult() {
+  document.getElementById('finalResult').classList.remove('visible');
+}
+
+init();
 </script>
 </body>
 </html>
